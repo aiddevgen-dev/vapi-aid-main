@@ -1,0 +1,299 @@
+import { useState, useEffect, useRef } from 'react';
+import { Device, Call } from '@twilio/voice-sdk';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+export const useTwilioVoice = (onCallDisconnected?: () => void) => {
+  const [device, setDevice] = useState<Device | null>(null);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isOnHold, setIsOnHold] = useState(false);
+  const [isDeviceReady, setIsDeviceReady] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const deviceRef = useRef<Device | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    console.log('useTwilioVoice: useEffect triggered');
+    initializeDevice();
+    
+    return () => {
+      console.log('useTwilioVoice: cleanup function called');
+      if (deviceRef.current) {
+        console.log('Cleaning up Twilio device...');
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+      }
+    };
+  }, []);
+
+  const initializeDevice = async () => {
+    if (isInitializing) {
+      console.log('Device initialization already in progress, skipping...');
+      return;
+    }
+
+    setIsInitializing(true);
+
+    try {
+      console.log('Initializing Twilio device...');
+      
+      // Clean up any existing device first
+      if (deviceRef.current) {
+        console.log('Destroying existing device...');
+        try {
+          deviceRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying existing device:', e);
+        }
+        deviceRef.current = null;
+        setDevice(null);
+        setIsDeviceReady(false);
+      }
+
+      // Get fresh token from edge function
+      const { data, error } = await supabase.functions.invoke('twilio-access-token', {
+        body: { identity: 'agent' }
+      });
+
+      console.log('Token response:', { data, error });
+
+      if (error) {
+        console.error('Token error:', error);
+        throw new Error(`Token fetch failed: ${error.message}`);
+      }
+
+      if (!data?.token) {
+        throw new Error('No token received from server');
+      }
+
+      // Validate token format
+      if (!data.token.startsWith('eyJ')) {
+        throw new Error('Invalid token format received');
+      }
+
+      console.log('Creating Twilio device with token...');
+      console.log('Token starts with:', data.token.substring(0, 50) + '...');
+      
+      // Create device with optimized settings for connection stability
+      const twilioDevice = new Device(data.token, {
+        logLevel: 1, // Reduce logging in production
+        allowIncomingWhileBusy: false,
+        // Let Twilio auto-select the best edge location for optimal connectivity
+        // Remove hardcoded edge to prevent regional connectivity issues
+      });
+
+      // Set up event listeners with better error handling
+      twilioDevice.on('ready', () => {
+        console.log('Twilio device ready');
+        setIsDeviceReady(true);
+        toast({
+          title: "Voice Ready",
+          description: "Voice device is ready for calls",
+        });
+      });
+
+      twilioDevice.on('error', (error) => {
+        console.error('Twilio device error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          causes: error.causes,
+          solutions: error.solutions,
+          originalError: error.originalError
+        });
+        
+        setIsDeviceReady(false);
+        
+        // Don't show toast for every error to prevent spam
+        if (error.code !== 31000) {
+          toast({
+            title: "Voice Connection Error",
+            description: `Connection issue (${error.code}). Will retry automatically.`,
+            variant: "destructive",
+          });
+        }
+      });
+
+      twilioDevice.on('incoming', (call) => {
+        console.log('Incoming call:', call);
+        setActiveCall(call);
+        setupCallListeners(call);
+      });
+
+      twilioDevice.on('registered', () => {
+        console.log('Device registered successfully');
+        console.log('Device identity:', twilioDevice.identity);
+        console.log('Device state:', twilioDevice.state);
+      });
+
+      twilioDevice.on('unregistered', () => {
+        console.log('Device unregistered');
+        setIsDeviceReady(false);
+      });
+
+      // Add token refresh logic
+      twilioDevice.on('tokenWillExpire', async () => {
+        console.log('Token will expire, refreshing...');
+        try {
+          const { data } = await supabase.functions.invoke('twilio-access-token', { 
+            body: { identity: 'agent' }
+          });
+          if (data?.token) {
+            twilioDevice.updateToken(data.token);
+            console.log('Token refreshed successfully');
+          }
+        } catch (error) {
+          console.error('Failed to refresh token:', error);
+        }
+      });
+
+      console.log('Registering device...');
+      await twilioDevice.register();
+      console.log('Device registration complete');
+      
+      setDevice(twilioDevice);
+      deviceRef.current = twilioDevice;
+
+    } catch (error) {
+      console.error('Error initializing Twilio device:', error);
+      setIsDeviceReady(false);
+      
+      toast({
+        title: "Voice Setup Error",
+        description: `Failed to initialize voice: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const setupCallListeners = (call: Call) => {
+    call.on('accept', () => {
+      console.log('Call accepted');
+      setIsConnected(true);
+      setActiveCall(call);
+    });
+
+    call.on('disconnect', () => {
+      console.log('Call disconnected');
+      setIsConnected(false);
+      setActiveCall(null);
+      setIsMuted(false);
+      setIsOnHold(false);
+      
+      // Notify parent component to clear dashboard state
+      if (onCallDisconnected) {
+        console.log('🔔 Notifying parent component of call disconnection');
+        onCallDisconnected();
+      }
+    });
+
+    call.on('cancel', () => {
+      console.log('Call cancelled');
+      setActiveCall(null);
+    });
+
+    call.on('reject', () => {
+      console.log('Call rejected');
+      setActiveCall(null);
+    });
+
+    call.on('error', (error) => {
+      console.error('Call error:', error);
+      toast({
+        title: "Call Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    });
+
+    call.on('mute', (muted) => {
+      console.log('Call mute status:', muted);
+      setIsMuted(muted);
+    });
+  };
+
+  const answerCall = () => {
+    if (activeCall) {
+      activeCall.accept();
+    }
+  };
+
+  const rejectCall = () => {
+    if (activeCall) {
+      activeCall.reject();
+      setActiveCall(null);
+    }
+  };
+
+  const hangupCall = () => {
+    if (activeCall) {
+      activeCall.disconnect();
+      
+      // Also trigger our backend to end the call properly
+      // This will be handled by the CallCenterLayout component
+    }
+  };
+
+  const toggleMute = () => {
+    if (activeCall) {
+      activeCall.mute(!isMuted);
+    }
+  };
+
+  const toggleHold = () => {
+    if (activeCall) {
+      // Twilio Voice SDK doesn't have built-in hold, we simulate with mute
+      activeCall.mute(!isOnHold);
+      setIsOnHold(!isOnHold);
+      
+      toast({
+        title: isOnHold ? "Call Resumed" : "Call On Hold",
+        description: `Call has been ${isOnHold ? 'resumed' : 'put on hold'}`,
+      });
+    }
+  };
+
+  const makeCall = async (to: string) => {
+    if (device && isDeviceReady) {
+      try {
+        const call = await device.connect({
+          params: {
+            To: to,
+          }
+        });
+        
+        setActiveCall(call);
+        setupCallListeners(call);
+        
+      } catch (error) {
+        console.error('Error making call:', error);
+        toast({
+          title: "Call Failed",
+          description: "Failed to make outgoing call",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  return {
+    device,
+    activeCall,
+    isConnected,
+    isMuted,
+    isOnHold,
+    isDeviceReady,
+    isInitializing,
+    answerCall,
+    rejectCall,
+    hangupCall,
+    toggleMute,
+    toggleHold,
+    makeCall,
+    retryConnection: initializeDevice, // Manual retry function
+  };
+};
