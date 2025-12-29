@@ -13,6 +13,7 @@ import { ActiveCallDialog } from './ActiveCallDialog';
 import { Call, CustomerProfile } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 
 interface CallCenterLayoutProps {
   showHeader?: boolean;
@@ -26,6 +27,28 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const [isActiveCallDialogOpen, setIsActiveCallDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  // Initialize Twilio Voice - centralized for both notification and panel
+  const {
+    activeCall: twilioCall,
+    isConnected,
+    isMuted,
+    isOnHold,
+    isDeviceReady,
+    isInitializing,
+    answerCall: twilioAnswerCall,
+    rejectCall: twilioRejectCall,
+    hangupCall: twilioHangupCall,
+    toggleMute,
+    toggleHold,
+    retryConnection,
+  } = useTwilioVoice(() => {
+    // Callback for when Twilio call disconnects
+    console.log('🔔 Twilio call disconnected - clearing dashboard state');
+    setActiveCall(null);
+    setCustomerProfile(null);
+    setIncomingCall(null);
+  });
 
   // Debug active call changes
   useEffect(() => {
@@ -400,7 +423,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     console.log('🔧 handleAnswerCall called with:', call?.id || 'no call provided');
     console.log('🔧 incomingCall state:', incomingCall?.id || 'no incoming call');
     console.log('🔧 activeCall state BEFORE:', activeCall?.id || 'no active call');
-    
+
     // CRITICAL DEBUG: Check database directly when answer is clicked
     console.log('🔍 [CRITICAL DEBUG] Checking database directly for ALL calls:');
     try {
@@ -409,13 +432,13 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         .select('*')
         .eq('call_status', 'ringing')
         .order('created_at', { ascending: false });
-      
+
       console.log('🔍 [CRITICAL DEBUG] ALL ringing calls in database:', {
         allRingingCalls,
         dbError,
         count: allRingingCalls?.length || 0
       });
-      
+
       if (allRingingCalls && allRingingCalls.length > 0) {
         console.log('🔍 [CRITICAL DEBUG] Most recent ringing call:', allRingingCalls[0]);
         console.log('🔍 [CRITICAL DEBUG] Why is this not in our state?', {
@@ -426,10 +449,10 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     } catch (dbErr) {
       console.error('❌ [CRITICAL DEBUG] Database query failed:', dbErr);
     }
-    
+
     // If no call provided and no incoming call in state, get the most recent ringing call from DB
     let callToAnswer = call || incomingCall;
-    
+
     if (!callToAnswer) {
       console.log('🔍 No call in state, checking database for recent ringing calls...');
       try {
@@ -443,9 +466,9 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
           .limit(1);
-          
+
         if (availError) throw availError;
-        
+
         if (availableCalls && availableCalls.length > 0) {
           callToAnswer = availableCalls[0] as Call;
           console.log('🔍 Found recent call in database:', callToAnswer.id);
@@ -454,22 +477,27 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         console.error('❌ Failed to check database for calls:', dbErr);
       }
     }
-    
+
     if (!callToAnswer) {
       console.error('❌ No call to answer - checked state and database');
       toast({
-        title: "No Call Available", 
+        title: "No Call Available",
         description: "No ringing calls found to answer",
         variant: "destructive"
       });
       return;
     }
-    
+
     console.log('📞 Answering call:', callToAnswer.id, 'status:', callToAnswer.call_status);
-    
+
     try {
-      // First update the call status and assign agent
-      console.log('🔄 Updating call in database...');
+      // STEP 1: Answer the Twilio call FIRST (connects audio)
+      console.log('📞 Step 1: Answering Twilio call...');
+      twilioAnswerCall();
+      console.log('✅ Twilio call answered');
+
+      // STEP 2: Update the call status and assign agent in database
+      console.log('🔄 Step 2: Updating call in database...');
       const currentAgentId = await (async () => {
         const { data: { user } } = await supabase.auth.getUser();
         return '2cb4c8df-b76c-427a-8f81-bf2b18c7391d'; // fallback to fixed ID
@@ -638,18 +666,46 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   };
 
   const handleDeclineCall = async (call: Call) => {
-    setIncomingCall(null);
-    
+    console.log('🚫 Declining call:', call.id);
+
+    // STEP 1: Reject the Twilio call (disconnect audio)
+    console.log('🚫 Step 1: Rejecting Twilio call...');
+    twilioRejectCall();
+    console.log('✅ Twilio call rejected');
+
+    // STEP 2: Update database FIRST (before clearing state)
     try {
-      await supabase
+      console.log('🔄 Step 2: Updating database...');
+      const { error } = await supabase
         .from('calls')
-        .update({ 
+        .update({
           call_status: 'completed',
           ended_at: new Date().toISOString()
         })
         .eq('id', call.id);
+
+      if (error) throw error;
+      console.log('✅ Database updated successfully');
+
+      // STEP 3: Clear state AFTER database update succeeds
+      console.log('🧹 Step 3: Clearing incomingCall state');
+      setIncomingCall(null);
+
+      toast({
+        title: "Call Declined",
+        description: "Incoming call was declined",
+      });
     } catch (error) {
-      console.error('Error declining call:', error);
+      console.error('❌ Error declining call:', error);
+
+      // Still clear state even if database update fails (prevent stuck UI)
+      setIncomingCall(null);
+
+      toast({
+        title: "Error",
+        description: "Failed to decline call properly",
+        variant: "destructive",
+      });
     }
   };
 
@@ -659,7 +715,12 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     console.log('🔚 handleEndCall called for call:', activeCall.id);
 
     try {
-      // Call our edge function to properly end the Twilio call
+      // STEP 1: Hangup Twilio call (disconnect audio)
+      console.log('🔚 Step 1: Hanging up Twilio call...');
+      twilioHangupCall();
+      console.log('✅ Twilio call hung up');
+
+      // STEP 2: Call our edge function to properly end the Twilio call in backend
       const { error } = await supabase.functions.invoke('twilio-end-call', {
         body: { callId: activeCall.id }
       });
@@ -685,7 +746,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         description: "Failed to end call properly",
         variant: "destructive",
       });
-      
+
       // Still clear state even if there was an error
       console.log('🧹 Clearing dashboard state despite error');
       setActiveCall(null);
@@ -757,12 +818,22 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               incomingCall={incomingCall}
               onAnswerCall={handleAnswerCall}
               onEndCall={handleEndCall}
+              onDeclineCall={handleDeclineCall}
               onClearDashboard={() => {
                 console.log('🧹 Dashboard clear requested from CallPanel');
                 setActiveCall(null);
                 setCustomerProfile(null);
                 setIncomingCall(null);
               }}
+              twilioCall={twilioCall}
+              isConnected={isConnected}
+              isMuted={isMuted}
+              isOnHold={isOnHold}
+              isDeviceReady={isDeviceReady}
+              isInitializing={isInitializing}
+              toggleMute={toggleMute}
+              toggleHold={toggleHold}
+              retryConnection={retryConnection}
             />
           </div>
         </aside>

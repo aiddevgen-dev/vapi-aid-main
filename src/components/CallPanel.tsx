@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Phone, PhoneOff, Mic, MicOff, Pause, Play } from 'lucide-react';
 import { Call } from '@/types/call-center';
-import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { supabase } from '@/integrations/supabase/client';
 
 interface CallPanelProps {
@@ -12,12 +11,39 @@ interface CallPanelProps {
   incomingCall: Call | null;
   onAnswerCall: (call?: Call) => void;
   onEndCall: () => void;
+  onDeclineCall: (call: Call) => void;
   onClearDashboard: () => void;
+  // Twilio state and functions passed from parent
+  twilioCall: any;
+  isConnected: boolean;
+  isMuted: boolean;
+  isOnHold: boolean;
+  isDeviceReady: boolean;
+  isInitializing: boolean;
+  toggleMute: () => void;
+  toggleHold: () => void;
+  retryConnection: () => void;
 }
 
-export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEndCall, onClearDashboard }: CallPanelProps) => {
+export const CallPanel = ({
+  activeCall: dbCall,
+  incomingCall,
+  onAnswerCall,
+  onEndCall,
+  onDeclineCall,
+  onClearDashboard,
+  twilioCall,
+  isConnected,
+  isMuted,
+  isOnHold,
+  isDeviceReady,
+  isInitializing,
+  toggleMute,
+  toggleHold,
+  retryConnection
+}: CallPanelProps) => {
   const [callDuration, setCallDuration] = useState(0);
-  
+
   // Debug: Log props received EVERY time they change
   useEffect(() => {
     console.log('🔵 [CALLPANEL DEBUG] Props received:', {
@@ -32,7 +58,7 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
       dbCallCustomer: dbCall?.customer_number || 'NONE',
       incomingCallCustomer: incomingCall?.customer_number || 'NONE'
     });
-    
+
     // Also log if we have ANY call to answer
     const callToAnswer = dbCall || incomingCall;
     console.log('🔵 [CALLPANEL DEBUG] Can answer call?', {
@@ -41,25 +67,6 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
       source: dbCall ? 'activeCall' : incomingCall ? 'incomingCall' : 'NO_CALL'
     });
   }, [dbCall, incomingCall]);
-  
-  const {
-    activeCall: twilioCall,
-    isConnected,
-    isMuted,
-    isOnHold,
-    isDeviceReady,
-    isInitializing,
-    answerCall,
-    rejectCall,
-    hangupCall,
-    toggleMute,
-    toggleHold,
-    retryConnection,
-  } = useTwilioVoice(() => {
-    // Callback for when Twilio call disconnects
-    console.log('🔔 Twilio call disconnected - clearing dashboard state');
-    onClearDashboard();
-  });
 
   // Timer for call duration
   useEffect(() => {
@@ -96,7 +103,7 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
       dbCallStatus: dbCall?.call_status || 'none',
       incomingCallStatus: incomingCall?.call_status || 'none'
     });
-    
+
     let callToAnswer = dbCall || incomingCall;
     console.log('🔵 CallPanel callToAnswer selected:', {
       callToAnswer: !!callToAnswer,
@@ -104,7 +111,7 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
       callStatus: callToAnswer?.call_status || 'none',
       source: dbCall ? 'dbCall' : incomingCall ? 'incomingCall' : 'none'
     });
-    
+
     // If no call in props, try to get the latest call directly from database
     if (!callToAnswer) {
       console.log('🔍 CallPanel: No call in props, checking database directly...');
@@ -117,9 +124,9 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
           .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
           .limit(1);
-          
+
         if (error) throw error;
-        
+
         if (availableCalls && availableCalls.length > 0) {
           callToAnswer = availableCalls[0];
           console.log('✅ CallPanel: Found call in database:', callToAnswer?.id);
@@ -128,27 +135,37 @@ export const CallPanel = ({ activeCall: dbCall, incomingCall, onAnswerCall, onEn
         console.error('❌ CallPanel: Database query failed:', dbError);
       }
     }
-    
+
     if (!callToAnswer) {
       console.error('❌ CallPanel: No call to answer (checked props and database)');
       console.error('❌ Current state - activeCall:', !!dbCall, 'incomingCall:', !!incomingCall);
       return;
     }
-    
-    // Use the exact same flow as the popup notification
-    console.log('🔵 CallPanel triggering Twilio answer and onAnswerCall with:', callToAnswer.id);
-    answerCall(); // Twilio answer
-    onAnswerCall(callToAnswer); // Same function as popup uses
+
+    // Call parent handler which handles BOTH Twilio answer + database update
+    console.log('🔵 CallPanel calling onAnswerCall with:', callToAnswer.id);
+    onAnswerCall(callToAnswer);
   };
 
   const handleEnd = () => {
-    hangupCall();
+    console.log('🔚 CallPanel: End button clicked');
+    // Parent handler now manages both Twilio hangup + database update
     onEndCall();
   };
 
   const handleReject = () => {
-    rejectCall();
-    onEndCall();
+    console.log('🚫 CallPanel: Reject/Decline button clicked');
+    // If there's an incoming call, use decline handler (rejects Twilio + updates DB)
+    // Otherwise use end call handler for active calls
+    if (incomingCall) {
+      console.log('🚫 Declining incoming call:', incomingCall.id);
+      onDeclineCall(incomingCall);
+    } else if (dbCall) {
+      console.log('🔚 Ending active call:', dbCall.id);
+      onEndCall();
+    } else {
+      console.warn('⚠️ No call to reject/end');
+    }
   };
 
   const getCallStatus = () => {
