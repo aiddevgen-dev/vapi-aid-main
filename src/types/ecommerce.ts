@@ -84,7 +84,7 @@ export interface User {
   email: string;
   full_name?: string;
   avatar_url?: string;
-  role: 'customer' | 'agent' | 'admin';
+  role: 'customer' | 'agent' | 'company' | 'admin';
   created_at: string;
   updated_at: string;
 }

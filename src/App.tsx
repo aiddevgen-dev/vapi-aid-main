@@ -7,6 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { EcommerceLayout } from "./components/EcommerceLayout";
 import { UnifiedAgentDashboard } from "./components/UnifiedAgentDashboard";
+import { CompanyDashboard } from "./pages/CompanyDashboard";
 import { Auth } from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -28,13 +29,21 @@ const App = () => (
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/agent" 
+          <Route
+            path="/agent"
             element={
               <ProtectedRoute requiredRole="agent">
                 <UnifiedAgentDashboard />
               </ProtectedRoute>
-            } 
+            }
+          />
+          <Route
+            path="/company"
+            element={
+              <ProtectedRoute requiredRole="company">
+                <CompanyDashboard />
+              </ProtectedRoute>
+            }
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

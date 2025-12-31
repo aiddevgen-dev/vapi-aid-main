@@ -103,9 +103,101 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   });
 
   const getCurrentAgentId = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    return '2cb4c8df-b76c-427a-8f81-bf2b18c7391d'; // fallback to fixed ID
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        console.error('❌ Error getting current user:', userError);
+        return null;
+      }
+
+      // Lookup agent record by user_id
+      const { data: agent, error: agentError } = await supabase
+        .from('agents')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (agentError) {
+        console.error('❌ Error fetching agent for user:', user.id, agentError);
+        return null;
+      }
+
+      if (!agent) {
+        console.error('❌ No agent found for user:', user.id);
+        return null;
+      }
+
+      console.log('✅ Found agent ID:', agent.id, 'for user:', user.id);
+      return agent.id;
+    } catch (error) {
+      console.error('❌ Unexpected error in getCurrentAgentId:', error);
+      return null;
+    }
   };
+
+  // Agent Status Management - set to online when logged in
+  useEffect(() => {
+    let agentId: string | null = null;
+
+    const setAgentOnline = async () => {
+      try {
+        agentId = await getCurrentAgentId();
+        if (!agentId) {
+          console.log('⚠️ No agent ID found, skipping status update');
+          return;
+        }
+
+        console.log('🟢 Setting agent status to online:', agentId);
+        const { error } = await supabase
+          .from('agents')
+          .update({
+            status: 'online',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', agentId);
+
+        if (error) {
+          console.error('❌ Error setting agent status to online:', error);
+        } else {
+          console.log('✅ Agent status set to online');
+        }
+      } catch (error) {
+        console.error('❌ Error in setAgentOnline:', error);
+      }
+    };
+
+    const setAgentOffline = async () => {
+      if (!agentId) return;
+
+      try {
+        console.log('🔴 Setting agent status to offline:', agentId);
+        const { error } = await supabase
+          .from('agents')
+          .update({
+            status: 'offline',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', agentId);
+
+        if (error) {
+          console.error('❌ Error setting agent status to offline:', error);
+        } else {
+          console.log('✅ Agent status set to offline');
+        }
+      } catch (error) {
+        console.error('❌ Error in setAgentOffline:', error);
+      }
+    };
+
+    // Set online on mount
+    setAgentOnline();
+
+    // Set offline on unmount (logout, page close, etc.)
+    return () => {
+      setAgentOffline();
+    };
+  }, []);
 
   // Subscribe to incoming calls and call updates - run only once
   useEffect(() => {
@@ -218,31 +310,43 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
         
         // Auto-correct state if database has calls but component state doesn't
         if (allCalls && allCalls.length > 0) {
+          console.log('🔍 [AUTO-SYNC] Analyzing calls from database:', {
+            totalCalls: allCalls.length,
+            calls: allCalls.map(c => ({
+              id: c.id,
+              status: c.call_status,
+              direction: c.call_direction,
+              agent_id: c.agent_id,
+              customer: c.customer_number,
+              created: c.created_at
+            }))
+          });
+
           // First check for in-progress calls assigned to this agent
-          const activeCallInDb = allCalls.find(call => 
-            call.agent_id === currentAgentId && 
+          const activeCallInDb = allCalls.find(call =>
+            call.agent_id === currentAgentId &&
             call.call_status === 'in-progress' &&
             call.call_direction === 'inbound'
           );
-          
+
           if (activeCallInDb && !activeCall) {
             const callAge = Date.now() - new Date(activeCallInDb.created_at).getTime();
             if (callAge < 60 * 60 * 1000) { // Active calls can be up to 1 hour old
               console.log('🔧 [AUTO-SYNC] Found missing active call, correcting state:', activeCallInDb.id);
               setActiveCall(activeCallInDb as Call);
               setIncomingCall(null); // Clear any incoming call state
-              
+
               // Load customer profile
               const { data: profile } = await supabase
                 .from('customer_profiles')
                 .select('*')
                 .eq('phone_number', activeCallInDb.customer_number)
                 .maybeSingle();
-              
+
               if (profile) {
                 setCustomerProfile(profile);
               }
-              
+
               // Start transcription if not already running
               try {
                 console.log('🎙️ Starting transcription for restored call:', activeCallInDb.id);
@@ -253,7 +357,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               } catch (error) {
                 console.error('❌ Failed to start transcription for restored call:', error);
               }
-              
+
               toast({
                 title: "Active Call Restored",
                 description: `Call with ${activeCallInDb.customer_number} (auto-restored)`,
@@ -261,17 +365,36 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               return; // Don't check for ringing calls if we found an active one
             }
           }
-          
+
           // If no active call, check for ringing calls (only if no activeCall in state)
           if (!activeCall) {
-            const availableCall = allCalls.find(call => 
-              (call.agent_id === currentAgentId || !call.agent_id) && 
+            console.log('🔍 [AUTO-SYNC] Searching for ringing calls...', {
+              currentAgentId,
+              hasActiveCall: !!activeCall,
+              hasIncomingCall: !!incomingCall
+            });
+
+            const availableCall = allCalls.find(call =>
+              (call.agent_id === currentAgentId || !call.agent_id) &&
               call.call_status === 'ringing' &&
               call.call_direction === 'inbound'
             );
-            
+
+            console.log('🔍 [AUTO-SYNC] Ringing call search result:', {
+              found: !!availableCall,
+              callId: availableCall?.id,
+              matchesAgentId: availableCall ? (availableCall.agent_id === currentAgentId || !availableCall.agent_id) : 'N/A',
+              status: availableCall?.call_status,
+              direction: availableCall?.call_direction
+            });
+
             if (availableCall && !incomingCall) {
               const callAge = Date.now() - new Date(availableCall.created_at).getTime();
+              console.log('🔍 [AUTO-SYNC] Call age check:', {
+                callAge: Math.round(callAge / 1000) + 's',
+                isRecent: callAge < 15 * 60 * 1000
+              });
+
               if (callAge < 15 * 60 * 1000) { // Only recent calls
                 console.log('🔧 [AUTO-SYNC] Found missing ringing call, correcting state:', availableCall.id);
                 setIncomingCall(availableCall as Call);
@@ -279,9 +402,20 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
                   title: "Incoming Call Detected",
                   description: `Call from ${availableCall.customer_number} (auto-detected)`,
                 });
+              } else {
+                console.log('⏰ [AUTO-SYNC] Call too old, not setting state');
               }
+            } else {
+              console.log('⚠️ [AUTO-SYNC] Not setting incomingCall:', {
+                hasAvailableCall: !!availableCall,
+                alreadyHasIncomingCall: !!incomingCall
+              });
             }
+          } else {
+            console.log('⚠️ [AUTO-SYNC] Skipping ringing call check - already have activeCall');
           }
+        } else {
+          console.log('📭 [AUTO-SYNC] No calls found in database');
         }
       } catch (err) {
         console.error('❌ [AUTO-SYNC] Database check failed:', err);
@@ -498,10 +632,11 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
 
       // STEP 2: Update the call status and assign agent in database
       console.log('🔄 Step 2: Updating call in database...');
-      const currentAgentId = await (async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        return '2cb4c8df-b76c-427a-8f81-bf2b18c7391d'; // fallback to fixed ID
-      })();
+      const currentAgentId = await getCurrentAgentId();
+
+      if (!currentAgentId) {
+        throw new Error('Unable to get current agent ID');
+      }
       const { data: updatedCall, error: updateError } = await supabase
         .from('calls')
         .update({ 
@@ -668,26 +803,26 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const handleDeclineCall = async (call: Call) => {
     console.log('🚫 Declining call:', call.id);
 
-    // STEP 1: Reject the Twilio call (disconnect audio)
-    console.log('🚫 Step 1: Rejecting Twilio call...');
-    twilioRejectCall();
-    console.log('✅ Twilio call rejected');
-
-    // STEP 2: Update database FIRST (before clearing state)
     try {
-      console.log('🔄 Step 2: Updating database...');
-      const { error } = await supabase
-        .from('calls')
-        .update({
-          call_status: 'completed',
-          ended_at: new Date().toISOString()
-        })
-        .eq('id', call.id);
+      // STEP 1: Reject the Twilio call (disconnect audio)
+      console.log('🚫 Step 1: Rejecting Twilio call...');
+      twilioRejectCall();
+      console.log('✅ Twilio call rejected');
 
-      if (error) throw error;
-      console.log('✅ Database updated successfully');
+      // STEP 2: Call edge function to properly end the Twilio call
+      console.log('🔄 Step 2: Calling twilio-end-call edge function...');
+      const { error: endCallError } = await supabase.functions.invoke('twilio-end-call', {
+        body: { callId: call.id }
+      });
 
-      // STEP 3: Clear state AFTER database update succeeds
+      if (endCallError) {
+        console.error('❌ Error calling twilio-end-call:', endCallError);
+        throw endCallError;
+      }
+
+      console.log('✅ Call ended successfully on Twilio side');
+
+      // STEP 3: Clear state AFTER call is properly ended
       console.log('🧹 Step 3: Clearing incomingCall state');
       setIncomingCall(null);
 
@@ -698,7 +833,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     } catch (error) {
       console.error('❌ Error declining call:', error);
 
-      // Still clear state even if database update fails (prevent stuck UI)
+      // Still clear state even if edge function fails (prevent stuck UI)
       setIncomingCall(null);
 
       toast({

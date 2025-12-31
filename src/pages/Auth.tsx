@@ -14,18 +14,19 @@ import { Loader2 } from 'lucide-react';
 export const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('signin');
-  const [role, setRole] = useState<'customer' | 'agent'>('customer');
+  const [role, setRole] = useState<'customer' | 'agent' | 'company'>('company');
   const [showLogout, setShowLogout] = useState(false);
-  
+
   // Sign in form
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
-  
+
   // Sign up form
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
   const [signUpFullName, setSignUpFullName] = useState('');
   const [signUpPhoneNumber, setSignUpPhoneNumber] = useState('');
+  const [signUpCompanyName, setSignUpCompanyName] = useState('');
   
   const { signIn, signUp, signOut, user, userProfile } = useAuth();
   const { toast } = useToast();
@@ -53,6 +54,8 @@ export const Auth = () => {
       // Only redirect if we're not on the auth page for logout purposes
       if (userProfile.role === 'agent') {
         navigate('/agent');
+      } else if (userProfile.role === 'company') {
+        navigate('/company');
       } else {
         navigate('/');
       }
@@ -109,7 +112,7 @@ export const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName, role, signUpPhoneNumber);
+      const { error } = await signUp(signUpEmail, signUpPassword, signUpFullName, role, signUpPhoneNumber, signUpCompanyName);
       
       if (error) {
         // Handle specific signup errors
@@ -230,6 +233,37 @@ export const Auth = () => {
             
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Account Type</Label>
+                  <RadioGroup value={role} onValueChange={(value: 'customer' | 'agent' | 'company') => setRole(value)}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="company" id="company" />
+                      <Label htmlFor="company">Company (Admin)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="customer" id="customer" />
+                      <Label htmlFor="customer">Customer</Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-xs text-muted-foreground">
+                    Note: Agent accounts are created by companies
+                  </p>
+                </div>
+
+                {role === 'company' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-company-name">Company Name</Label>
+                    <Input
+                      id="signup-company-name"
+                      type="text"
+                      placeholder="Enter your company name"
+                      value={signUpCompanyName}
+                      onChange={(e) => setSignUpCompanyName(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Full Name</Label>
                   <Input
@@ -274,19 +308,6 @@ export const Auth = () => {
                     required
                   />
                 </div>
-                <div className="space-y-3">
-                  <Label>Account Type</Label>
-                  <RadioGroup value={role} onValueChange={(value: 'customer' | 'agent') => setRole(value)}>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="customer" id="customer" />
-                      <Label htmlFor="customer">Customer</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="agent" id="agent" />
-                      <Label htmlFor="agent">Agent</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Account
@@ -315,12 +336,14 @@ export const Auth = () => {
                   Sign Out
                 </Button>
                 <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    className="w-full" 
+                  <Button
+                    variant="outline"
+                    className="w-full"
                     onClick={() => {
                       if (userProfile?.role === 'agent') {
                         navigate('/agent');
+                      } else if (userProfile?.role === 'company') {
+                        navigate('/company');
                       } else {
                         navigate('/');
                       }

@@ -8,7 +8,7 @@ interface AuthContextType {
   session: Session | null;
   userProfile: AppUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, role?: 'customer' | 'agent', phoneNumber?: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, role?: 'customer' | 'agent' | 'company', phoneNumber?: string, companyName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -93,43 +93,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   //   return { error };
   // };
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'customer' | 'agent' = 'customer', phoneNumber?: string) => {
-  const redirectUrl = `${window.location.origin}/`;
-  
-  // Step 1: Create auth user
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: redirectUrl,
-      data: {
-        full_name: fullName,
-        role: role,
-        phone_number: phoneNumber
-      }
-    }
-  });
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'customer' | 'agent' | 'company' = 'customer',
+    phoneNumber?: string,
+    companyName?: string
+  ) => {
+    try {
+      console.log('🔵 Starting signup for:', email, 'role:', role);
 
-  // Step 2: Insert into users table
-  if (!error && data.user) {
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert({
-        user_id: data.user.id,
-        email: email,
-        full_name: fullName,
-        role: role,
-        phone_number: phoneNumber
+      // Step 1: Create auth user
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: fullName,
+            role: role,
+            phone_number: phoneNumber,
+            company_name: companyName
+          }
+        }
       });
 
-    if (profileError) {
-      console.error('Error creating user profile:', profileError);
-      return { error: profileError };
-    }
-  }
+      if (error) {
+        console.error('❌ Auth signup error:', error);
+        return { error };
+      }
 
-  return { error };
-};
+      if (!data.user) {
+        console.error('❌ No user data returned');
+        return { error: new Error('No user data returned from signup') };
+      }
+
+      console.log('✅ Auth user created:', data.user.id);
+
+      // Small delay to ensure auth user is committed
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 2: Insert into users table
+      console.log('🔵 Creating user profile...');
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          user_id: data.user.id,
+          email: email,
+          full_name: fullName,
+          role: role,
+          phone_number: phoneNumber
+        });
+
+      if (profileError) {
+        console.error('❌ User profile error:', profileError);
+        return { error: profileError };
+      }
+
+      console.log('✅ User profile created');
+
+      // Step 3: If company, create company record
+      if (role === 'company') {
+        console.log('🔵 Creating company record...');
+        const { error: companyError } = await supabase
+          .from('companies')
+          .insert({
+            user_id: data.user.id,
+            company_name: companyName || fullName,
+            email: email,
+            phone: phoneNumber
+          });
+
+        if (companyError) {
+          console.error('❌ Company record error:', companyError);
+          return { error: companyError };
+        }
+
+        console.log('✅ Company record created');
+      }
+
+      console.log('✅ Signup complete!');
+      return { error: null };
+    } catch (err: any) {
+      console.error('❌ Unexpected signup error:', err);
+      return { error: err };
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

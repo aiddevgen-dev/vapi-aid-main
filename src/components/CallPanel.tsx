@@ -153,19 +153,49 @@ export const CallPanel = ({
     onEndCall();
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     console.log('🚫 CallPanel: Reject/Decline button clicked');
+
     // If there's an incoming call, use decline handler (rejects Twilio + updates DB)
-    // Otherwise use end call handler for active calls
     if (incomingCall) {
       console.log('🚫 Declining incoming call:', incomingCall.id);
       onDeclineCall(incomingCall);
-    } else if (dbCall) {
+      return;
+    }
+
+    // If there's an active call, end it
+    if (dbCall) {
       console.log('🔚 Ending active call:', dbCall.id);
       onEndCall();
-    } else {
-      console.warn('⚠️ No call to reject/end');
+      return;
     }
+
+    // If state is empty but Twilio has a call, query database directly
+    if (twilioCall) {
+      console.log('🔍 No call in state but Twilio call exists, checking database...');
+      try {
+        const { data: ringingCalls, error } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('call_status', 'ringing')
+          .eq('call_direction', 'inbound')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+
+        if (ringingCalls && ringingCalls.length > 0) {
+          const call = ringingCalls[0];
+          console.log('✅ Found call in database:', call.id, 'declining it now');
+          onDeclineCall(call);
+          return;
+        }
+      } catch (err) {
+        console.error('❌ Failed to query database for call:', err);
+      }
+    }
+
+    console.warn('⚠️ No call to reject/end anywhere (state, Twilio, or database)');
   };
 
   const getCallStatus = () => {

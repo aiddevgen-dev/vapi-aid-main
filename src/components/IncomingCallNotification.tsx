@@ -19,8 +19,15 @@ export const IncomingCallNotification = ({
   const [ringingDuration, setRingingDuration] = useState(0);
 
   useEffect(() => {
+    console.log('📢 IncomingCallNotification - incomingCall changed:', {
+      hasCall: !!incomingCall,
+      callId: incomingCall?.id,
+      status: incomingCall?.call_status,
+      customerNumber: incomingCall?.customer_number
+    });
+
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (incomingCall && (incomingCall.call_status === 'ringing' || incomingCall.call_status === 'in-progress')) {
       interval = setInterval(() => {
         setRingingDuration(prev => prev + 1);
@@ -28,13 +35,25 @@ export const IncomingCallNotification = ({
     } else {
       setRingingDuration(0);
     }
-    
+
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [incomingCall]);
 
-  if (!incomingCall || incomingCall.call_status === 'completed' || incomingCall.call_status === 'failed' || incomingCall.call_status === 'in-progress') {
+  const shouldShow = incomingCall &&
+                     incomingCall.call_status !== 'completed' &&
+                     incomingCall.call_status !== 'failed' &&
+                     incomingCall.call_status !== 'in-progress';
+
+  console.log('📢 IncomingCallNotification - render decision:', {
+    incomingCall: incomingCall?.id || 'null',
+    status: incomingCall?.call_status || 'null',
+    shouldShow,
+    willRenderNotification: shouldShow
+  });
+
+  if (!shouldShow) {
     return null;
   }
 
