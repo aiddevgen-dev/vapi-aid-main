@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Phone, PhoneOff, Mic, MicOff, Pause, Play } from 'lucide-react';
+import { Phone, PhoneOff, PhoneOutgoing, Mic, MicOff, Pause, Play } from 'lucide-react';
 import { Call } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -198,11 +198,13 @@ export const CallPanel = ({
     console.warn('⚠️ No call to reject/end anywhere (state, Twilio, or database)');
   };
 
+  const isOutboundCall = dbCall?.call_direction === 'outbound';
+
   const getCallStatus = () => {
     if (!isDeviceReady) return "Initializing...";
-    if (twilioCall && !isConnected) return "Incoming";
+    if (twilioCall && !isConnected) return isOutboundCall ? "Dialing" : "Incoming";
     if (isConnected) return "Connected";
-    if (dbCall && !twilioCall) return "Waiting";
+    if (dbCall && !twilioCall) return isOutboundCall ? "Dialing" : "Waiting";
     return "Ready";
   };
 
@@ -227,9 +229,19 @@ export const CallPanel = ({
         {(dbCall || incomingCall || twilioCall) ? (
           <>
             <div className="bg-sidebar-accent p-4 rounded-lg">
-              <p className="text-sm font-medium text-sidebar-accent-foreground">
-                Customer Number
-              </p>
+              <div className="flex items-center gap-2 text-sm font-medium text-sidebar-accent-foreground">
+                {isOutboundCall ? (
+                  <>
+                    <PhoneOutgoing className="h-3 w-3" />
+                    Calling
+                  </>
+                ) : (
+                  <>
+                    <Phone className="h-3 w-3" />
+                    Customer Number
+                  </>
+                )}
+              </div>
               <p className="text-lg font-mono text-sidebar-foreground">
                 {(dbCall || incomingCall)?.customer_number || 'Unknown'}
               </p>
@@ -246,22 +258,33 @@ export const CallPanel = ({
 
             <div className="flex flex-col gap-2">
               {!isConnected && twilioCall ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    onClick={handleAnswer} 
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Phone className="mr-2 h-4 w-4" />
-                    Answer
-                  </Button>
-                  <Button 
-                    onClick={handleReject} 
+                isOutboundCall ? (
+                  <Button
+                    onClick={handleEnd}
                     variant="destructive"
+                    className="w-full"
                   >
                     <PhoneOff className="mr-2 h-4 w-4" />
-                    Decline
+                    Cancel Call
                   </Button>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={handleAnswer}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Phone className="mr-2 h-4 w-4" />
+                      Answer
+                    </Button>
+                    <Button
+                      onClick={handleReject}
+                      variant="destructive"
+                    >
+                      <PhoneOff className="mr-2 h-4 w-4" />
+                      Decline
+                    </Button>
+                  </div>
+                )
               ) : isConnected ? (
                 <>
                   <div className="grid grid-cols-2 gap-2">

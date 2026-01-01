@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
+import { OutboundDialer } from './OutboundDialer';
 import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { CallHistory } from './CallHistory';
@@ -42,6 +43,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     toggleMute,
     toggleHold,
     retryConnection,
+    makeCall,
   } = useTwilioVoice(() => {
     // Callback for when Twilio call disconnects
     console.log('🔔 Twilio call disconnected - clearing dashboard state');
@@ -890,6 +892,73 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     }
   };
 
+  // Handle outbound call initiation
+  const handleOutboundCall = async (phoneNumber: string) => {
+    console.log('📞 Initiating outbound call to:', phoneNumber);
+
+    try {
+      const currentAgentId = await getCurrentAgentId();
+
+      if (!currentAgentId) {
+        throw new Error('Unable to get current agent ID');
+      }
+
+      // Make the call via Twilio Device
+      await makeCall(phoneNumber);
+
+      // The call record will be created by the twilio-outbound-call edge function
+      // when TwiML App calls it. We just need to listen for the call to appear.
+
+      toast({
+        title: "Outbound Call",
+        description: `Calling ${phoneNumber}...`,
+      });
+
+      // Subscribe to calls table to catch the outbound call record
+      // The edge function creates it with direction='outbound'
+      const checkForCall = async () => {
+        const { data: outboundCall } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('customer_number', phoneNumber)
+          .eq('call_direction', 'outbound')
+          .eq('agent_id', currentAgentId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (outboundCall) {
+          console.log('📞 Found outbound call record:', outboundCall);
+          setActiveCall(outboundCall as Call);
+
+          // Load customer profile
+          const { data: profile } = await supabase
+            .from('customer_profiles')
+            .select('*')
+            .eq('phone_number', phoneNumber)
+            .maybeSingle();
+
+          if (profile) {
+            setCustomerProfile(profile);
+          }
+        }
+      };
+
+      // Check after a short delay to allow edge function to create record
+      setTimeout(checkForCall, 1000);
+      setTimeout(checkForCall, 3000);
+
+    } catch (error) {
+      console.error('❌ Error initiating outbound call:', error);
+      toast({
+        title: "Call Failed",
+        description: "Failed to initiate outbound call",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   // Simulate incoming call (for demo purposes)
   const simulateIncomingCall = async () => {
     try {
@@ -945,9 +1014,21 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           </header>
         )}
 
-        {/* Sidebar - Call Panel */}
-        <aside className={`w-80 border-r bg-sidebar ${showHeader ? 'pt-12' : ''}`}>
-          <div className="p-4 h-full">
+        {/* Sidebar - Call Panel & Outbound Dialer */}
+        <aside className={`w-80 border-r bg-sidebar ${showHeader ? 'pt-12' : ''} overflow-y-auto`}>
+          <div className="p-4 space-y-4">
+            {/* Outbound Dialer */}
+            <OutboundDialer
+              isDeviceReady={isDeviceReady}
+              isConnected={isConnected}
+              onMakeCall={handleOutboundCall}
+              onCallInitiated={(customerNumber) => {
+                console.log('Outbound call initiated to:', customerNumber);
+              }}
+              disabled={!!activeCall || !!incomingCall}
+            />
+
+            {/* Call Panel */}
             <CallPanel
               activeCall={activeCall}
               incomingCall={incomingCall}

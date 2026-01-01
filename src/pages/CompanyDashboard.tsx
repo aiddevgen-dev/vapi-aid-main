@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Eye, EyeOff, Users, Phone, BarChart3, Clock, TrendingUp } from 'lucide-react';
+import { Loader2, Plus, Eye, EyeOff, Users, Phone, PhoneIncoming, PhoneOutgoing, BarChart3, Clock, TrendingUp, ChevronDown, ChevronUp, MessageSquare, User, Mail, Activity, CheckCircle, XCircle, Calendar } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 interface Company {
@@ -28,6 +29,9 @@ interface Agent {
   created_at: string;
   email?: string;
   phone_number?: string;
+  inbound_calls?: number;
+  outbound_calls?: number;
+  total_calls?: number;
 }
 
 interface AgentCredentials {
@@ -51,6 +55,11 @@ interface AgentPerformance {
   avg_duration: number;
   last_call: string | null;
   status: string;
+  inbound_calls: number;
+  outbound_calls: number;
+  completed_calls: number;
+  success_rate: number;
+  calls_today: number;
 }
 
 interface RecentCall {
@@ -59,6 +68,15 @@ interface RecentCall {
   agent_name: string;
   duration: number;
   call_status: string;
+  call_direction: string;
+  created_at: string;
+  started_at: string | null;
+}
+
+interface Transcript {
+  id: string;
+  speaker: string | null;
+  text: string;
   created_at: string;
 }
 
@@ -79,6 +97,11 @@ export const CompanyDashboard = () => {
   });
   const [agentPerformance, setAgentPerformance] = useState<AgentPerformance[]>([]);
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
+  const [expandedCallId, setExpandedCallId] = useState<string | null>(null);
+  const [callTranscripts, setCallTranscripts] = useState<Record<string, Transcript[]>>({});
+  const [loadingTranscript, setLoadingTranscript] = useState<string | null>(null);
+  const [callsLimit, setCallsLimit] = useState(20);
+  const [hasMoreCalls, setHasMoreCalls] = useState(false);
 
   // Agent creation form
   const [agentName, setAgentName] = useState('');
@@ -124,7 +147,7 @@ export const CompanyDashboard = () => {
 
       setCompany(companyData);
 
-      // Fetch agents belonging to this company
+      // Fetch agents belonging to this company with call stats
       const { data: agentsData, error: agentsError } = await supabase
         .from('agents')
         .select(`
@@ -132,14 +155,18 @@ export const CompanyDashboard = () => {
           name,
           status,
           user_id,
-          created_at
+          created_at,
+          calls(
+            id,
+            call_direction
+          )
         `)
         .eq('company_id', companyData.id)
         .order('created_at', { ascending: false });
 
       if (agentsError) throw agentsError;
 
-      // Fetch user details for each agent
+      // Fetch user details for each agent and calculate call stats
       const agentsWithDetails = await Promise.all(
         (agentsData || []).map(async (agent) => {
           const { data: userData } = await supabase
@@ -148,10 +175,17 @@ export const CompanyDashboard = () => {
             .eq('user_id', agent.user_id)
             .single();
 
+          const calls = agent.calls || [];
+          const inboundCalls = calls.filter(c => c.call_direction === 'inbound' || !c.call_direction).length;
+          const outboundCalls = calls.filter(c => c.call_direction === 'outbound').length;
+
           return {
             ...agent,
             email: userData?.email,
             phone_number: userData?.phone_number,
+            inbound_calls: inboundCalls,
+            outbound_calls: outboundCalls,
+            total_calls: calls.length,
           };
         })
       );
@@ -234,16 +268,25 @@ export const CompanyDashboard = () => {
             id,
             started_at,
             ended_at,
-            created_at
+            created_at,
+            call_direction,
+            call_status
           )
         `)
         .eq('company_id', companyId);
 
       if (error) throw error;
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       const performance = agents?.map(agent => {
         const calls = agent.calls || [];
         const completedCalls = calls.filter(c => c.ended_at && c.started_at);
+        const inboundCalls = calls.filter(c => c.call_direction === 'inbound' || !c.call_direction);
+        const outboundCalls = calls.filter(c => c.call_direction === 'outbound');
+        const successfulCalls = calls.filter(c => c.call_status === 'completed');
+        const callsToday = calls.filter(c => new Date(c.created_at) >= today);
 
         const avgDuration = completedCalls.length > 0
           ? completedCalls.reduce((sum, call) => {
@@ -256,6 +299,8 @@ export const CompanyDashboard = () => {
           ? calls.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].created_at
           : null;
 
+        const successRate = calls.length > 0 ? (successfulCalls.length / calls.length) * 100 : 0;
+
         return {
           agent_id: agent.id,
           agent_name: agent.name,
@@ -263,6 +308,11 @@ export const CompanyDashboard = () => {
           avg_duration: Math.round(avgDuration),
           last_call: lastCall,
           status: agent.status,
+          inbound_calls: inboundCalls.length,
+          outbound_calls: outboundCalls.length,
+          completed_calls: completedCalls.length,
+          success_rate: Math.round(successRate),
+          calls_today: callsToday.length,
         };
       }) || [];
 
@@ -272,14 +322,15 @@ export const CompanyDashboard = () => {
     }
   };
 
-  const fetchRecentCalls = async (companyId: string) => {
+  const fetchRecentCalls = async (companyId: string, limit: number = 20) => {
     try {
-      const { data: calls, error } = await supabase
+      const { data: calls, error, count } = await supabase
         .from('calls')
         .select(`
           id,
           customer_number,
           call_status,
+          call_direction,
           started_at,
           ended_at,
           created_at,
@@ -287,10 +338,10 @@ export const CompanyDashboard = () => {
             name,
             company_id
           )
-        `)
+        `, { count: 'exact' })
         .eq('agents.company_id', companyId)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(limit);
 
       if (error) throw error;
 
@@ -305,14 +356,69 @@ export const CompanyDashboard = () => {
           agent_name: call.agents.name,
           duration,
           call_status: call.call_status,
+          call_direction: call.call_direction || 'inbound',
           created_at: call.created_at,
+          started_at: call.started_at,
         };
       }) || [];
 
       setRecentCalls(recentCallsData);
+      setHasMoreCalls((count || 0) > limit);
     } catch (error) {
       console.error('Error fetching recent calls:', error);
     }
+  };
+
+  const fetchTranscript = async (callId: string) => {
+    if (callTranscripts[callId]) return;
+    setLoadingTranscript(callId);
+    try {
+      const { data, error } = await supabase
+        .from('transcripts')
+        .select('id, speaker, text, created_at')
+        .eq('call_id', callId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setCallTranscripts(prev => ({ ...prev, [callId]: data || [] }));
+    } catch (error) {
+      console.error('Error fetching transcript:', error);
+    } finally {
+      setLoadingTranscript(null);
+    }
+  };
+
+  const toggleCallExpand = async (callId: string) => {
+    if (expandedCallId === callId) {
+      setExpandedCallId(null);
+    } else {
+      setExpandedCallId(callId);
+      await fetchTranscript(callId);
+    }
+  };
+
+  const loadMoreCalls = () => {
+    const newLimit = callsLimit + 20;
+    setCallsLimit(newLimit);
+    if (company) fetchRecentCalls(company.id, newLimit);
+  };
+
+  const formatCallDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return `Today ${time}`;
+    if (isYesterday) return `Yesterday ${time}`;
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ` ${time}`;
   };
 
   const handleCreateAgent = async (e: React.FormEvent) => {
@@ -490,109 +596,322 @@ export const CompanyDashboard = () => {
 
           {/* Agents List */}
           <TabsContent value="agents">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Agents</CardTitle>
-                <CardDescription>Manage your team of agents</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {agents.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
-                          No agents yet. Create your first agent to get started.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      agents.map((agent) => (
-                        <TableRow key={agent.id}>
-                          <TableCell className="font-medium">{agent.name}</TableCell>
-                          <TableCell>{agent.email || 'N/A'}</TableCell>
-                          <TableCell>{agent.phone_number || 'N/A'}</TableCell>
-                          <TableCell>
-                            <Badge variant={agent.status === 'online' ? 'default' : 'secondary'}>
-                              {agent.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(agent.created_at).toLocaleDateString()}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">Your Agents</h2>
+                  <p className="text-muted-foreground">Manage your team of agents and view their call configurations</p>
+                </div>
+                <Badge variant="outline" className="text-sm">
+                  {agents.length} Agent{agents.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+
+              {agents.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Agents Yet</h3>
+                    <p className="text-muted-foreground text-center mb-4">
+                      Create your first agent to start handling calls
+                    </p>
+                    <Button onClick={() => document.querySelector('[value="create"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Agent
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {agents.map((agent) => (
+                    <Card key={agent.id} className="overflow-hidden">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                              agent.status === 'online'
+                                ? 'bg-green-500/10 text-green-600'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              <User className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-base">{agent.name}</CardTitle>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className={`h-2 w-2 rounded-full ${
+                                  agent.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                                }`} />
+                                <span className="text-xs text-muted-foreground capitalize">{agent.status}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant={agent.status === 'online' ? 'default' : 'secondary'} className="text-xs">
+                            {agent.status === 'online' ? 'Active' : 'Offline'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Contact Info */}
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="h-3.5 w-3.5" />
+                            <span className="truncate">{agent.email || 'No email'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-3.5 w-3.5" />
+                            <span>{agent.phone_number || 'No phone'}</span>
+                          </div>
+                        </div>
+
+                        {/* Call Configuration Boxes */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-lg border bg-green-500/5 border-green-500/20 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <PhoneIncoming className="h-4 w-4 text-green-600" />
+                              <span className="text-xs font-medium text-green-700">Inbound</span>
+                            </div>
+                            <div className="text-2xl font-bold text-green-600">
+                              {agent.inbound_calls || 0}
+                            </div>
+                            <p className="text-xs text-muted-foreground">calls handled</p>
+                          </div>
+                          <div className="rounded-lg border bg-blue-500/5 border-blue-500/20 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <PhoneOutgoing className="h-4 w-4 text-blue-600" />
+                              <span className="text-xs font-medium text-blue-700">Outbound</span>
+                            </div>
+                            <div className="text-2xl font-bold text-blue-600">
+                              {agent.outbound_calls || 0}
+                            </div>
+                            <p className="text-xs text-muted-foreground">calls made</p>
+                          </div>
+                        </div>
+
+                        {/* Total Calls Summary */}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">Total Calls:</span>
+                            <span className="font-semibold">{agent.total_calls || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(agent.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           {/* Performance Tab */}
           <TabsContent value="performance">
-            <Card>
-              <CardHeader>
-                <CardTitle>Agent Performance</CardTitle>
-                <CardDescription>View performance metrics for each agent</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Agent Name</TableHead>
-                      <TableHead>Total Calls</TableHead>
-                      <TableHead>Avg Duration</TableHead>
-                      <TableHead>Last Call</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {agentPerformance.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
-                          No performance data yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      agentPerformance.map((perf) => (
-                        <TableRow key={perf.agent_id}>
-                          <TableCell className="font-medium">{perf.agent_name}</TableCell>
-                          <TableCell>{perf.total_calls}</TableCell>
-                          <TableCell>{perf.avg_duration}s</TableCell>
-                          <TableCell>
-                            {perf.last_call ? new Date(perf.last_call).toLocaleString() : 'Never'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={perf.status === 'online' ? 'default' : 'secondary'}>
-                              {perf.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">Agent Performance</h2>
+                  <p className="text-muted-foreground">Detailed performance metrics and analytics for your team</p>
+                </div>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Active Agents</p>
+                        <p className="text-3xl font-bold">{agentPerformance.filter(p => p.status === 'online').length}</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Activity className="h-6 w-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Today's Calls</p>
+                        <p className="text-3xl font-bold text-green-600">{agentPerformance.reduce((sum, p) => sum + p.calls_today, 0)}</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                        <Phone className="h-6 w-6 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Avg Success Rate</p>
+                        <p className="text-3xl font-bold text-blue-600">
+                          {agentPerformance.length > 0
+                            ? Math.round(agentPerformance.reduce((sum, p) => sum + p.success_rate, 0) / agentPerformance.length)
+                            : 0}%
+                        </p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                        <TrendingUp className="h-6 w-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-purple-500/5 to-purple-500/10 border-purple-500/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Avg Duration</p>
+                        <p className="text-3xl font-bold text-purple-600">
+                          {agentPerformance.length > 0
+                            ? formatCallDuration(Math.round(agentPerformance.reduce((sum, p) => sum + p.avg_duration, 0) / agentPerformance.length))
+                            : '0s'}
+                        </p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                        <Clock className="h-6 w-6 text-purple-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Agent Performance Cards */}
+              {agentPerformance.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Performance Data</h3>
+                    <p className="text-muted-foreground text-center">
+                      Performance metrics will appear once your agents start handling calls
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {agentPerformance.map((perf) => (
+                    <Card key={perf.agent_id} className="overflow-hidden hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                          {/* Agent Info */}
+                          <div className="flex items-center gap-4 lg:w-1/4">
+                            <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                              perf.status === 'online'
+                                ? 'bg-green-500/10 text-green-600'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              <User className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-lg">{perf.agent_name}</h3>
+                              <div className="flex items-center gap-2">
+                                <div className={`h-2 w-2 rounded-full ${
+                                  perf.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                                }`} />
+                                <span className="text-sm text-muted-foreground capitalize">{perf.status}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Call Stats */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                            {/* Total Calls */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Total Calls</span>
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <p className="text-2xl font-bold">{perf.total_calls}</p>
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="text-green-600">{perf.inbound_calls} in</span>
+                                <span className="text-muted-foreground">•</span>
+                                <span className="text-blue-600">{perf.outbound_calls} out</span>
+                              </div>
+                            </div>
+
+                            {/* Success Rate */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Success Rate</span>
+                                {perf.success_rate >= 70 ? (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-amber-500" />
+                                )}
+                              </div>
+                              <p className="text-2xl font-bold">{perf.success_rate}%</p>
+                              <Progress
+                                value={perf.success_rate}
+                                className="h-2"
+                              />
+                            </div>
+
+                            {/* Avg Duration */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Avg Duration</span>
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <p className="text-2xl font-bold">{formatCallDuration(perf.avg_duration)}</p>
+                              <p className="text-xs text-muted-foreground">per call</p>
+                            </div>
+
+                            {/* Today's Activity */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Today</span>
+                                <Activity className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <p className="text-2xl font-bold">{perf.calls_today}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {perf.last_call ? `Last: ${formatDateTime(perf.last_call)}` : 'No calls today'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Call Direction Breakdown */}
+                          <div className="lg:w-1/5">
+                            <div className="flex gap-2">
+                              <div className="flex-1 rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-center">
+                                <PhoneIncoming className="h-4 w-4 text-green-600 mx-auto mb-1" />
+                                <p className="text-lg font-bold text-green-600">{perf.inbound_calls}</p>
+                                <p className="text-xs text-muted-foreground">Inbound</p>
+                              </div>
+                              <div className="flex-1 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-center">
+                                <PhoneOutgoing className="h-4 w-4 text-blue-600 mx-auto mb-1" />
+                                <p className="text-lg font-bold text-blue-600">{perf.outbound_calls}</p>
+                                <p className="text-xs text-muted-foreground">Outbound</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           {/* Call History Tab */}
           <TabsContent value="calls">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Calls</CardTitle>
-                <CardDescription>View the last 10 calls handled by your team</CardDescription>
+                <CardTitle>Call History</CardTitle>
+                <CardDescription>View all calls handled by your team with transcripts</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Direction</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Agent</TableHead>
                       <TableHead>Duration</TableHead>
@@ -603,27 +922,102 @@ export const CompanyDashboard = () => {
                   <TableBody>
                     {recentCalls.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
                           No calls yet.
                         </TableCell>
                       </TableRow>
                     ) : (
                       recentCalls.map((call) => (
-                        <TableRow key={call.id}>
-                          <TableCell className="font-medium">{call.customer_number}</TableCell>
-                          <TableCell>{call.agent_name}</TableCell>
-                          <TableCell>{call.duration}s</TableCell>
-                          <TableCell>
-                            <Badge variant={call.call_status === 'completed' ? 'default' : 'secondary'}>
-                              {call.call_status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(call.created_at).toLocaleString()}</TableCell>
-                        </TableRow>
+                        <React.Fragment key={call.id}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => toggleCallExpand(call.id)}
+                          >
+                            <TableCell>
+                              {expandedCallId === call.id ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {call.call_direction === 'outbound' ? (
+                                  <>
+                                    <PhoneOutgoing className="h-4 w-4 text-blue-500" />
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
+                                      Outbound
+                                    </Badge>
+                                  </>
+                                ) : (
+                                  <>
+                                    <PhoneIncoming className="h-4 w-4 text-green-500" />
+                                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
+                                      Inbound
+                                    </Badge>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono">{call.customer_number}</TableCell>
+                            <TableCell>{call.agent_name}</TableCell>
+                            <TableCell>{formatCallDuration(call.duration)}</TableCell>
+                            <TableCell>
+                              <Badge variant={call.call_status === 'completed' ? 'default' : 'secondary'}>
+                                {call.call_status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{formatDateTime(call.created_at)}</TableCell>
+                          </TableRow>
+                          {expandedCallId === call.id && (
+                            <TableRow>
+                              <TableCell colSpan={7} className="bg-muted/30 p-4">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-sm font-medium">
+                                    <MessageSquare className="h-4 w-4" />
+                                    Call Transcript
+                                  </div>
+                                  {loadingTranscript === call.id ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Loading transcript...
+                                    </div>
+                                  ) : callTranscripts[call.id]?.length > 0 ? (
+                                    <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border bg-background p-3">
+                                      {callTranscripts[call.id].map((t) => (
+                                        <div key={t.id} className={`flex gap-2 ${t.speaker === 'agent' ? 'justify-end' : ''}`}>
+                                          <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                                            t.speaker === 'agent'
+                                              ? 'bg-primary text-primary-foreground'
+                                              : 'bg-muted'
+                                          }`}>
+                                            <div className="text-xs opacity-70 mb-1">
+                                              {t.speaker === 'agent' ? 'Agent' : 'Customer'}
+                                            </div>
+                                            {t.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No transcript available for this call.</p>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                       ))
                     )}
                   </TableBody>
                 </Table>
+                {hasMoreCalls && (
+                  <div className="flex justify-center pt-4">
+                    <Button variant="outline" onClick={loadMoreCalls}>
+                      Load More Calls
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -681,7 +1075,7 @@ export const CompanyDashboard = () => {
                       <Input
                         id="agent-phone"
                         type="tel"
-                        placeholder="+1234567890"
+                        placeholder="+17656763105"
                         value={agentPhone}
                         onChange={(e) => setAgentPhone(e.target.value)}
                         required

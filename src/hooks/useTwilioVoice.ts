@@ -126,6 +126,8 @@ export const useTwilioVoice = (onCallDisconnected?: () => void) => {
         console.log('Device registered successfully');
         console.log('Device identity:', twilioDevice.identity);
         console.log('Device state:', twilioDevice.state);
+        // Also set device ready here since 'ready' event may not fire in newer SDK
+        setIsDeviceReady(true);
       });
 
       twilioDevice.on('unregistered', () => {
@@ -258,25 +260,39 @@ export const useTwilioVoice = (onCallDisconnected?: () => void) => {
   };
 
   const makeCall = async (to: string) => {
-    if (device && isDeviceReady) {
-      try {
-        const call = await device.connect({
-          params: {
-            To: to,
-          }
-        });
-        
-        setActiveCall(call);
-        setupCallListeners(call);
-        
-      } catch (error) {
-        console.error('Error making call:', error);
-        toast({
-          title: "Call Failed",
-          description: "Failed to make outgoing call",
-          variant: "destructive",
-        });
-      }
+    console.log('📞 makeCall called with:', to);
+    console.log('📞 Device state:', { device: !!device, isDeviceReady, deviceState: device?.state });
+
+    if (!device) {
+      console.error('❌ makeCall: No Twilio device available');
+      throw new Error('Twilio device not initialized');
+    }
+
+    if (!isDeviceReady) {
+      console.error('❌ makeCall: Device not ready, state:', device?.state);
+      throw new Error('Twilio device not ready');
+    }
+
+    try {
+      console.log('📞 Connecting call to:', to);
+      const call = await device.connect({
+        params: {
+          To: to,
+        }
+      });
+
+      console.log('📞 Call connected:', call);
+      setActiveCall(call);
+      setupCallListeners(call);
+
+    } catch (error) {
+      console.error('❌ Error making call:', error);
+      toast({
+        title: "Call Failed",
+        description: "Failed to make outgoing call",
+        variant: "destructive",
+      });
+      throw error;
     }
   };
 
