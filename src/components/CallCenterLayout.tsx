@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { CallPanel } from './CallPanel';
-import { OutboundDialer } from './OutboundDialer';
+import { OutboundDialer, Lead } from './OutboundDialer';
 import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 import { AISuggestionsPanel } from './AISuggestionsPanel';
 import { CallHistory } from './CallHistory';
-import { CustomerInfoPanel } from './CustomerInfoPanel';
 import { EnhancedCustomerInfoPanel } from './EnhancedCustomerInfoPanel';
 import { CustomerChatHistory } from './CustomerChatHistory';
 import { CallDetailsModal } from './CallDetailsModal';
@@ -27,6 +26,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
   const [isCallDetailsOpen, setIsCallDetailsOpen] = useState(false);
   const [isActiveCallDialogOpen, setIsActiveCallDialogOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const { toast } = useToast();
 
   // Initialize Twilio Voice - centralized for both notification and panel
@@ -50,6 +50,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     setActiveCall(null);
     setCustomerProfile(null);
     setIncomingCall(null);
+    setSelectedLead(null);
   });
 
   // Debug active call changes
@@ -85,6 +86,63 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       status: incomingCall?.call_status,
       customerNumber: incomingCall?.customer_number
     });
+  }, [incomingCall]);
+
+  // Lookup lead for inbound calls
+  useEffect(() => {
+    const lookupLeadForInboundCall = async () => {
+      // Only lookup for inbound calls, not outbound (outbound already has selectedLead set)
+      if (!incomingCall || incomingCall.call_direction === 'outbound') {
+        return;
+      }
+
+      const customerNumber = incomingCall.customer_number;
+      if (!customerNumber) return;
+
+      console.log('🔍 Looking up lead for inbound caller:', customerNumber);
+
+      try {
+        // Get agent's company_id first
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!agent?.company_id) {
+          console.log('⚠️ No company_id found for agent');
+          return;
+        }
+
+        // Lookup lead by phone number in the agent's company
+        const { data: lead, error } = await (supabase as any)
+          .from('leads')
+          .select('*')
+          .eq('company_id', agent.company_id)
+          .eq('phone_number', customerNumber)
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Error looking up lead:', error);
+          return;
+        }
+
+        if (lead) {
+          console.log('✅ Found matching lead for inbound call:', lead.name);
+          setSelectedLead(lead as Lead);
+        } else {
+          console.log('ℹ️ No matching lead found for:', customerNumber);
+          setSelectedLead(null);
+        }
+      } catch (error) {
+        console.error('❌ Error in lead lookup:', error);
+      }
+    };
+
+    lookupLeadForInboundCall();
   }, [incomingCall]);
 
   // Debug render
@@ -532,6 +590,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               setActiveCall(null);
               setCustomerProfile(null);
               setIncomingCall(null);
+              setSelectedLead(null);
             }
           }
           
@@ -881,6 +940,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       setActiveCall(null);
       setCustomerProfile(null);
       setIncomingCall(null);
+      setSelectedLead(null);
     } catch (error) {
       console.error('Error ending call:', error);
       toast({
@@ -894,6 +954,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
       setActiveCall(null);
       setCustomerProfile(null);
       setIncomingCall(null);
+      setSelectedLead(null);
     }
   };
 
@@ -1002,6 +1063,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           incomingCall={incomingCall}
           onAnswer={handleAnswerCall}
           onDecline={handleDeclineCall}
+          leadName={selectedLead?.name}
         />
 
         {showHeader && (
@@ -1030,6 +1092,10 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
               onCallInitiated={(customerNumber) => {
                 console.log('Outbound call initiated to:', customerNumber);
               }}
+              onLeadSelected={(lead) => {
+                console.log('Lead selected for outbound call:', lead);
+                setSelectedLead(lead);
+              }}
               disabled={!!activeCall || !!incomingCall}
             />
 
@@ -1045,6 +1111,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
                 setActiveCall(null);
                 setCustomerProfile(null);
                 setIncomingCall(null);
+                setSelectedLead(null);
               }}
               twilioCall={twilioCall}
               isConnected={isConnected}
@@ -1171,6 +1238,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           isOpen={isActiveCallDialogOpen}
           onClose={() => setIsActiveCallDialogOpen(false)}
           activeCall={activeCall}
+          selectedLead={selectedLead}
         />
       </div>
     </SidebarProvider>

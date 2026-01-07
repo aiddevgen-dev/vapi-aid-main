@@ -9,12 +9,14 @@ interface IncomingCallNotificationProps {
   incomingCall: Call | null;
   onAnswer: (call: Call) => void;
   onDecline: (call: Call) => void;
+  leadName?: string | null;
 }
 
-export const IncomingCallNotification = ({ 
-  incomingCall, 
-  onAnswer, 
-  onDecline 
+export const IncomingCallNotification = ({
+  incomingCall,
+  onAnswer,
+  onDecline,
+  leadName
 }: IncomingCallNotificationProps) => {
   const [ringingDuration, setRingingDuration] = useState(0);
 
@@ -75,10 +77,21 @@ export const IncomingCallNotification = ({
               <User className="h-6 w-6 text-green-400" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">
-                {incomingCall.customer_number}
-              </p>
-              <p className="text-sm text-muted-foreground">
+              {leadName ? (
+                <>
+                  <p className="font-semibold text-foreground">
+                    {leadName}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {incomingCall.customer_number}
+                  </p>
+                </>
+              ) : (
+                <p className="font-semibold text-foreground">
+                  {incomingCall.customer_number}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
                 {incomingCall.call_direction} call
               </p>
             </div>

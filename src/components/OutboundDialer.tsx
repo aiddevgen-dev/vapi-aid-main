@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Phone, PhoneCall, User, X } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Phone, Users, MapPin, Target, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-interface CustomerProfile {
+export interface Lead {
   id: string;
-  phone_number: string;
-  name: string | null;
+  company_id: string;
+  name: string;
   email: string | null;
-  call_history_count: number;
-  last_interaction_at: string | null;
+  phone_number: string;
+  security_pin: string;
+  address: string;
+  intent: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface OutboundDialerProps {
@@ -21,6 +25,7 @@ interface OutboundDialerProps {
   isConnected: boolean;
   onMakeCall: (phoneNumber: string) => Promise<void>;
   onCallInitiated?: (customerNumber: string) => void;
+  onLeadSelected?: (lead: Lead) => void;
   disabled?: boolean;
 }
 
@@ -29,90 +34,98 @@ export const OutboundDialer = ({
   isConnected,
   onMakeCall,
   onCallInitiated,
+  onLeadSelected,
   disabled = false
 }: OutboundDialerProps) => {
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [isDialing, setIsDialing] = useState(false);
-  const [customerPreview, setCustomerPreview] = useState<CustomerProfile | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
+  const [agentCompanyId, setAgentCompanyId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Lookup customer when phone number changes
+  // Fetch agent's company_id on mount
   useEffect(() => {
-    const lookupCustomer = async () => {
-      if (phoneNumber.length < 10) {
-        setCustomerPreview(null);
-        return;
-      }
-
-      setIsSearching(true);
+    const fetchAgentCompany = async () => {
       try {
-        // Try different phone number formats
-        const formats = [
-          phoneNumber,
-          `+${phoneNumber}`,
-          `+1${phoneNumber}`,
-          phoneNumber.replace(/\D/g, '')
-        ];
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-        for (const format of formats) {
-          const { data, error } = await supabase
-            .from('customer_profiles')
-            .select('*')
-            .eq('phone_number', format)
-            .maybeSingle();
+        const { data: agent } = await supabase
+          .from('agents')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
 
-          if (data && !error) {
-            setCustomerPreview(data);
-            setIsSearching(false);
-            return;
-          }
+        if (agent?.company_id) {
+          setAgentCompanyId(agent.company_id);
         }
-        setCustomerPreview(null);
       } catch (error) {
-        console.error('Error looking up customer:', error);
-        setCustomerPreview(null);
-      } finally {
-        setIsSearching(false);
+        console.error('Error fetching agent company:', error);
       }
     };
 
-    const debounce = setTimeout(lookupCustomer, 500);
-    return () => clearTimeout(debounce);
-  }, [phoneNumber]);
+    fetchAgentCompany();
+  }, []);
 
-  const formatPhoneNumber = (value: string) => {
-    // Remove all non-digits except + at start
-    const cleaned = value.replace(/[^\d+]/g, '');
-    return cleaned;
-  };
+  // Auto-fetch leads when company_id is available
+  useEffect(() => {
+    if (agentCompanyId) {
+      fetchLeads();
+    }
+  }, [agentCompanyId]);
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setPhoneNumber(formatted);
-  };
+  const fetchLeads = async () => {
+    if (!agentCompanyId) {
+      setIsLoadingLeads(false);
+      return;
+    }
 
-  const handleMakeCall = async () => {
-    if (!phoneNumber || phoneNumber.length < 10) {
+    setIsLoadingLeads(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('leads')
+        .select('*')
+        .eq('company_id', agentCompanyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setLeads(data || []);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
       toast({
-        title: "Invalid Number",
-        description: "Please enter a valid phone number",
+        title: "Error",
+        description: "Failed to load leads",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingLeads(false);
+    }
+  };
+
+  const handleCallLead = async (lead: Lead) => {
+    if (!lead.phone_number) {
+      toast({
+        title: "Invalid Lead",
+        description: "This lead has no phone number",
         variant: "destructive"
       });
       return;
     }
 
-    // Removed device ready check - let it try and show actual error if any
-
     setIsDialing(true);
     try {
       // Format number with + if not present
-      let formattedNumber = phoneNumber;
+      let formattedNumber = lead.phone_number;
       if (!formattedNumber.startsWith('+')) {
         formattedNumber = `+${formattedNumber}`;
       }
 
-      console.log('Initiating outbound call to:', formattedNumber);
+      console.log('Initiating outbound call to lead:', lead.name, formattedNumber);
+
+      // Pass lead data to parent first
+      if (onLeadSelected) {
+        onLeadSelected(lead);
+      }
 
       await onMakeCall(formattedNumber);
 
@@ -122,7 +135,7 @@ export const OutboundDialer = ({
 
       toast({
         title: "Calling...",
-        description: `Dialing ${formattedNumber}`,
+        description: `Dialing ${lead.name} at ${formattedNumber}`,
       });
 
     } catch (error) {
@@ -137,96 +150,96 @@ export const OutboundDialer = ({
     }
   };
 
-  const handleClear = () => {
-    setPhoneNumber('');
-    setCustomerPreview(null);
-  };
-
-  // Simplified - only disable if already in call or dialing
-  const isCallDisabled = disabled || isConnected || isDialing || phoneNumber.length < 10;
-
   return (
-    <Card className="bg-sidebar border-sidebar-border">
-      <CardHeader className="pb-3">
+    <Card className="bg-sidebar border-sidebar-border border-2 border-primary/30">
+      <CardHeader className="pb-2 pt-3">
         <CardTitle className="text-sidebar-foreground flex items-center justify-between text-base">
           <div className="flex items-center gap-2">
-            <PhoneCall className="h-4 w-4" />
-            Outbound Call
+            <Users className="h-4 w-4 text-primary" />
+            <span>Company Leads</span>
+            <Badge variant="outline" className="text-xs ml-1">
+              {leads.length}
+            </Badge>
           </div>
-          {isDeviceReady ? (
-            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
-              Ready
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
-              Connecting...
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={fetchLeads}
+              disabled={isLoadingLeads}
+              className="h-6 w-6"
+            >
+              <RefreshCw className={`h-3 w-3 ${isLoadingLeads ? 'animate-spin' : ''}`} />
+            </Button>
+            {isDeviceReady ? (
+              <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
+                Ready
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                Connecting...
+              </Badge>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Phone Input */}
-        <div className="relative">
-          <Input
-            type="tel"
-            placeholder="Enter phone number..."
-            value={phoneNumber}
-            onChange={handlePhoneChange}
-            disabled={isConnected || isDialing}
-            className="pr-8 font-mono bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-accent-foreground/50"
-          />
-          {phoneNumber && (
-            <button
-              onClick={handleClear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-sidebar-accent-foreground hover:text-sidebar-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Customer Preview */}
-        {isSearching && (
-          <div className="text-xs text-sidebar-accent-foreground">
-            Searching customer...
-          </div>
-        )}
-
-        {customerPreview && (
-          <div className="bg-sidebar-accent p-3 rounded-lg border border-sidebar-border">
-            <div className="flex items-center gap-2 mb-1">
-              <User className="h-3 w-3 text-sidebar-accent-foreground" />
-              <span className="text-xs text-sidebar-accent-foreground">Customer Found</span>
-            </div>
-            <p className="text-sm font-medium text-sidebar-foreground">
-              {customerPreview.name || 'Unknown Name'}
-            </p>
-            {customerPreview.email && (
-              <p className="text-xs text-sidebar-accent-foreground">
-                {customerPreview.email}
-              </p>
-            )}
-            <p className="text-xs text-sidebar-accent-foreground mt-1">
-              {customerPreview.call_history_count} previous call{customerPreview.call_history_count !== 1 ? 's' : ''}
-            </p>
-          </div>
-        )}
-
-        {/* Call Button */}
-        <Button
-          onClick={handleMakeCall}
-          disabled={isCallDisabled}
-          className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-        >
-          <Phone className="mr-2 h-4 w-4" />
-          {isDialing ? 'Dialing...' : isConnected ? 'In Call' : 'Call'}
-        </Button>
-
-        {/* Status Info */}
+      <CardContent className="pt-2 pb-3">
+        {/* Status message when on call */}
         {isConnected && (
-          <p className="text-xs text-center text-sidebar-accent-foreground">
+          <p className="text-xs text-center text-muted-foreground mb-2 py-1 bg-muted/50 rounded">
             End current call before making a new one
           </p>
+        )}
+
+        {/* Leads List */}
+        {isLoadingLeads ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="text-center py-4">
+            <Users className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No leads found</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Add leads from Company Dashboard
+            </p>
+          </div>
+        ) : (
+          <ScrollArea className="h-[320px]">
+            <div className="space-y-2 pr-2">
+              {leads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className="p-3 rounded-lg border border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent hover:border-primary/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="font-semibold text-sm text-sidebar-foreground">
+                      {lead.name}
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleCallLead(lead)}
+                      disabled={isDialing || isConnected || disabled}
+                      className="bg-green-600 hover:bg-green-700 text-white h-7 px-3 text-xs flex-shrink-0"
+                    >
+                      <Phone className="h-3 w-3 mr-1" />
+                      Call
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Target className="h-3 w-3 text-primary flex-shrink-0" />
+                      <span className="text-xs text-primary">{lead.intent}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground font-mono">{lead.phone_number}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </CardContent>
     </Card>
