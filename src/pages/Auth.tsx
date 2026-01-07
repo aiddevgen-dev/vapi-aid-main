@@ -170,13 +170,15 @@ export const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="lyric-theme min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-border">
         <CardHeader className="text-center">
-          <img src="/complete-credit-logo.png" alt="Complete Credit Solutions" className="h-16 mx-auto mb-2" />
-          <CardTitle className="text-2xl font-bold text-primary">Complete Credit Solutions</CardTitle>
-          <CardDescription>
-            Employee Portal - Sign in to access your dashboard
+          <div className="w-16 h-16 mx-auto mb-2 bg-primary rounded-xl flex items-center justify-center">
+            <span className="text-2xl font-bold text-primary-foreground">L</span>
+          </div>
+          <CardTitle className="text-2xl font-bold text-foreground">Lyric.ai</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Contact Centre Portal - Sign in to access your dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -218,12 +220,12 @@ export const Auth = () => {
               </form>
               
               <div className="mt-4 p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">Demo Accounts:</p>
+                <p className="text-sm font-medium text-foreground mb-2">Demo Accounts:</p>
                 <p className="text-xs text-muted-foreground mb-1">Customer: customer1@test.com / password123</p>
                 <p className="text-xs text-muted-foreground mb-3">Agent: agent1@test.com / password123</p>
-                
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
+
+                <div className="p-3 bg-primary/10 border border-primary/30 rounded-md">
+                  <p className="text-xs text-foreground">
                     📧 <strong>Important:</strong> After signing up, you must confirm your email before you can sign in. Check your inbox for the confirmation link!
                   </p>
                 </div>
@@ -338,7 +340,7 @@ export const Auth = () => {
                 <div className="space-y-2">
                   <Button
                     variant="outline"
-                    className="w-full"
+                    className="w-full border-primary/50 text-foreground hover:bg-primary/20"
                     onClick={() => {
                       if (userProfile?.role === 'agent') {
                         navigate('/agent');

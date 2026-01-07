@@ -62,11 +62,16 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
     });
   }, [activeCall]);
 
-  // Open dialog when call becomes active
+  // Open dialog when call becomes active (in-progress) OR for outbound calls (ringing)
   useEffect(() => {
-    if (activeCall && activeCall.call_status === 'in-progress') {
+    const shouldOpenDialog = activeCall && (
+      activeCall.call_status === 'in-progress' ||
+      (activeCall.call_status === 'ringing' && activeCall.call_direction === 'outbound')
+    );
+
+    if (shouldOpenDialog) {
       setIsActiveCallDialogOpen(true);
-      console.log('📱 Opening active call dialog for call:', activeCall.id);
+      console.log('📱 Opening active call dialog for call:', activeCall.id, 'status:', activeCall.call_status);
     } else {
       setIsActiveCallDialogOpen(false);
       console.log('📱 Closing active call dialog');
@@ -991,7 +996,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="lyric-theme min-h-screen flex w-full bg-background">
         {/* Incoming Call Notification */}
         <IncomingCallNotification
           incomingCall={incomingCall}
@@ -1003,7 +1008,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
             <SidebarTrigger className="ml-2" />
             <div className="flex-1 text-center">
-              <h1 className="text-lg font-semibold">Call Center Dashboard</h1>
+              <h1 className="text-lg font-semibold">Lyric.ai Contact Centre</h1>
             </div>
             <button 
               onClick={simulateIncomingCall}

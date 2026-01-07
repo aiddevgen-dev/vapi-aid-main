@@ -118,9 +118,9 @@ export const AnalyticsDashboard = () => {
 
   if (loading || !analytics) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="lyric-theme p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
+          <h2 className="text-2xl font-bold">Lyric.ai Analytics</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -137,12 +137,12 @@ export const AnalyticsDashboard = () => {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="lyric-theme p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <TrendingUp className="h-6 w-6" />
-          Analytics Dashboard
+          Lyric.ai Analytics
         </h2>
         <Select value={timeRange} onValueChange={setTimeRange}>
           <SelectTrigger className="w-40">

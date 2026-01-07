@@ -556,12 +556,12 @@ export const AgentDashboard = ({ showHeader = true }: AgentDashboardProps) => {
 
   return (
     <SidebarProvider>
-      <div className="h-screen flex flex-col w-full bg-background">
+      <div className="lyric-theme h-screen flex flex-col w-full bg-background">
         {showHeader && (
           <header className="h-12 flex items-center border-b bg-background z-20 flex-shrink-0">
             <SidebarTrigger className="ml-2" />
             <div className="flex-1 text-center">
-              <h1 className="text-lg font-semibold">Agent Dashboard</h1>
+              <h1 className="text-lg font-semibold">Lyric.ai Chat Support</h1>
             </div>
           </header>
         )}

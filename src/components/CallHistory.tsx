@@ -4,20 +4,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Phone, 
-  PhoneIncoming, 
-  PhoneOutgoing, 
-  Clock, 
+import {
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Clock,
   Calendar,
   Eye,
   Filter,
-  Search
+  Search,
+  PhoneOff
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { Call } from '@/types/call-center';
+import { useToast } from '@/hooks/use-toast';
 
 interface CallHistoryProps {
   onSelectCall?: (call: Call) => void;
@@ -31,6 +33,55 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
+  const [endingCallId, setEndingCallId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // End call - update DB to completed and disconnect from Twilio
+  const handleEndCall = async (call: Call, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering onSelectCall
+
+    if (!call.id) return;
+    setEndingCallId(call.id);
+
+    try {
+      // 1. Call the twilio-end-call edge function to disconnect from Twilio
+      if (call.twilio_call_sid) {
+        await supabase.functions.invoke('twilio-end-call', {
+          body: { callId: call.id }
+        });
+      }
+
+      // 2. Update call status to completed in database
+      const { error } = await supabase
+        .from('calls')
+        .update({
+          call_status: 'completed',
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', call.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Call Ended",
+        description: `Call with ${call.customer_number} marked as completed`,
+      });
+    } catch (error) {
+      console.error('Error ending call:', error);
+      toast({
+        title: "Error",
+        description: "Failed to end call properly",
+        variant: "destructive"
+      });
+    } finally {
+      setEndingCallId(null);
+    }
+  };
+
+  // Check if call is active (can be ended)
+  const isCallActive = (status: string) => {
+    return status === 'in-progress' || status === 'ringing';
+  };
 
   useEffect(() => {
     loadCalls();
@@ -244,13 +295,13 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-sm text-gray-900 truncate">
+                            <p className="font-medium text-sm text-foreground truncate">
                               {call.customer_number}
                             </p>
                             {getStatusBadge(call.call_status || 'completed')}
                           </div>
                           
-                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {formatDate(call.started_at)}
@@ -270,15 +321,33 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
                         </div>
                       </div>
                       
-                      {onSelectCall && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="flex-shrink-0 h-8 w-8 p-0"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* End Call button for active calls */}
+                        {isCallActive(call.call_status || '') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={(e) => handleEndCall(call, e)}
+                            disabled={endingCallId === call.id}
+                          >
+                            {endingCallId === call.id ? (
+                              <div className="h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <PhoneOff className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        {onSelectCall && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   

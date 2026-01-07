@@ -489,22 +489,28 @@ export const CompanyDashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="lyric-theme min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="lyric-theme min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{company?.company_name}</h1>
-            <p className="text-muted-foreground">Company Dashboard</p>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex flex-col">
+                <h1 className="text-2xl font-bold text-foreground">Lyric.ai</h1>
+                <span className="text-xs text-muted-foreground">Admin Portal For Contact Centre</span>
+              </div>
+              <div className="h-8 w-px bg-border"></div>
+              <span className="text-xl font-semibold text-foreground">{company?.company_name}</span>
+            </div>
           </div>
-          <Button variant="outline" onClick={() => navigate('/auth?action=logout')}>
+          <Button variant="outline" onClick={() => navigate('/auth?action=logout')} className="border-primary/50 text-foreground hover:bg-primary/20">
             Sign Out
           </Button>
         </div>

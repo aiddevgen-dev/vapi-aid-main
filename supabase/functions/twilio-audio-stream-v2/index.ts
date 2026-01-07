@@ -86,7 +86,8 @@ Deno.serve(async (req) => {
   // State variables
   let callSid: string | null = null;
   let callId: string | null = null;
-  let lastTrack: "inbound" | "outbound" | null = null;
+  let streamTrack: "inbound" | "outbound" | null = null; // Fixed track for this stream (set once from first media event)
+  let streamRole: "customer" | "agent" | null = null; // Fixed role based on stream track
   let assemblySocket: WebSocket | null = null;
   let audioChunks: Uint8Array[] = [];
   let isAssemblyConnected = false;
@@ -137,17 +138,16 @@ Deno.serve(async (req) => {
             
             console.log("💬 Transcript received:", transcript, "- Formatted:", isFormatted);
             
-            if (isFormatted && transcript.trim() && callId) {
-              // Determine role based on last track with enhanced logging
-              const role = lastTrack === "outbound" ? "agent" : "customer";
-              console.log("🎯 Role determination - lastTrack:", lastTrack, "→ role:", role);
+            if (isFormatted && transcript.trim() && callId && streamRole) {
+              // Use fixed role based on stream track (set once when stream started)
+              console.log("🎯 Using fixed stream role:", streamRole, "(track:", streamTrack, ")");
               
               // Save transcript to database
               const { error: transcriptError } = await supabase
                 .from("transcripts")
                 .insert({
                   call_id: callId,
-                  speaker: role,
+                  speaker: streamRole,
                   text: transcript.trim(),
                   created_at: new Date().toISOString()
                 });
@@ -155,10 +155,10 @@ Deno.serve(async (req) => {
               if (transcriptError) {
                 console.error("❌ Save transcript error:", transcriptError);
               } else {
-                console.log("✅ Transcript saved!");
-                
+                console.log("✅ Transcript saved for", streamRole);
+
                 // Generate AI suggestion for customer messages
-                if (role === "customer") {
+                if (streamRole === "customer") {
                   console.log("🤖 Generating suggestion...");
                   
                   try {
@@ -281,13 +281,12 @@ Deno.serve(async (req) => {
       else if (message.event === "media") {
         const track = message.media?.track;
         const audioPayload = message.media?.payload;
-        
-        // Debug logging for track info
-        console.log("🎧 Media event - Track:", track, "Payload length:", audioPayload?.length || 0);
-        
-        if (track) {
-          console.log("📊 Track updated from", lastTrack, "to", track);
-          lastTrack = track;
+
+        // Set fixed track and role on FIRST media event (stream is single-track now)
+        if (track && !streamTrack) {
+          streamTrack = track;
+          streamRole = track === "outbound" ? "agent" : "customer";
+          console.log("🎯 Stream track fixed:", streamTrack, "→ role:", streamRole);
         }
 
         if (audioPayload && isAssemblyConnected) {

@@ -122,33 +122,43 @@ serve(async (req) => {
       // Start live transcription on the call - proceed even if status is ringing since it will be answered
       console.log('Creating transcription stream for call with status:', call.status);
       
-      // Use unique stream name to avoid "Session already exist" errors
-      const streamName = `transcription-${callRecord.twilio_call_sid}-${Date.now()}`;
-      console.log('Using stream name:', streamName);
-      
-      const streamConfig = {
-        url: `wss://blgjdtftopdkszdioskv.supabase.co/functions/v1/twilio-audio-stream-v2`,
-        name: streamName,
-        track: 'both_tracks'
-      };
-      
-      console.log('Creating stream with config:', streamConfig);
-      
-      const stream = await client.calls(callRecord.twilio_call_sid).streams.create(streamConfig);
+      // Create TWO separate streams - one for customer (inbound) and one for agent (outbound)
+      // This ensures accurate speaker attribution for transcription
+      const timestamp = Date.now();
 
-      console.log('Started transcription stream:', stream.sid, 'with name:', streamName);
-      console.log('Stream details:', {
-        sid: stream.sid,
-        name: stream.name,
-        status: stream.status,
-        dateCreated: stream.dateCreated
-      });
+      // Stream for customer audio (inbound_track)
+      const inboundStreamConfig = {
+        url: `wss://blgjdtftopdkszdioskv.supabase.co/functions/v1/twilio-audio-stream-v2`,
+        name: `transcription-inbound-${callRecord.twilio_call_sid}-${timestamp}`,
+        track: 'inbound_track'
+      };
+
+      // Stream for agent audio (outbound_track)
+      const outboundStreamConfig = {
+        url: `wss://blgjdtftopdkszdioskv.supabase.co/functions/v1/twilio-audio-stream-v2`,
+        name: `transcription-outbound-${callRecord.twilio_call_sid}-${timestamp}`,
+        track: 'outbound_track'
+      };
+
+      console.log('Creating dual streams for accurate speaker detection');
+      console.log('Inbound (customer) stream config:', inboundStreamConfig);
+      console.log('Outbound (agent) stream config:', outboundStreamConfig);
+
+      // Create both streams
+      const [inboundStream, outboundStream] = await Promise.all([
+        client.calls(callRecord.twilio_call_sid).streams.create(inboundStreamConfig),
+        client.calls(callRecord.twilio_call_sid).streams.create(outboundStreamConfig)
+      ]);
+
+      console.log('Started inbound stream:', inboundStream.sid);
+      console.log('Started outbound stream:', outboundStream.sid);
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Transcription started',
-          streamSid: stream.sid,
+        JSON.stringify({
+          success: true,
+          message: 'Transcription started (dual streams)',
+          inboundStreamSid: inboundStream.sid,
+          outboundStreamSid: outboundStream.sid,
           hasTranscription: true
         }),
         {

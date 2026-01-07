@@ -32,12 +32,15 @@ export const UnifiedAgentDashboard = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="lyric-theme h-screen flex flex-col bg-background">
       {/* Header with Mode Toggle */}
       <header className="h-14 flex items-center justify-between px-4 border-b bg-background z-20 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">Agent Dashboard</h1>
-          <Badge variant="outline" className="text-xs">
+          <div className="flex flex-col">
+            <h1 className="text-xl font-bold text-foreground">Lyric.ai</h1>
+            <span className="text-xs text-muted-foreground">Contact Centre</span>
+          </div>
+          <Badge variant="outline" className="text-xs border-primary/50 text-foreground">
             {mode === 'call-center' ? 'Call Center Mode' : 
              mode === 'chat-support' ? 'Chat Support Mode' : 
              'Analytics Mode'}
@@ -51,7 +54,7 @@ export const UnifiedAgentDashboard = () => {
               variant={mode === 'call-center' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setMode('call-center')}
-              className="flex items-center gap-2 transition-all"
+              className={`flex items-center gap-2 transition-all ${mode !== 'call-center' ? 'text-foreground hover:bg-primary/20' : ''}`}
             >
               <Phone className="h-4 w-4" />
               Call Center
@@ -60,7 +63,7 @@ export const UnifiedAgentDashboard = () => {
               variant={mode === 'chat-support' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setMode('chat-support')}
-              className="flex items-center gap-2 transition-all"
+              className={`flex items-center gap-2 transition-all ${mode !== 'chat-support' ? 'text-foreground hover:bg-primary/20' : ''}`}
             >
               <MessageSquare className="h-4 w-4" />
               Chat Support
@@ -69,7 +72,7 @@ export const UnifiedAgentDashboard = () => {
               variant={mode === 'analytics' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setMode('analytics')}
-              className="flex items-center gap-2 transition-all"
+              className={`flex items-center gap-2 transition-all ${mode !== 'analytics' ? 'text-foreground hover:bg-primary/20' : ''}`}
             >
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -77,18 +80,18 @@ export const UnifiedAgentDashboard = () => {
           </div>
 
           {/* User Info and Logout */}
-          <div className="flex items-center gap-2 pl-4 border-l">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">
+          <div className="flex items-center gap-3 pl-4 border-l border-border">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-lg">
+              <User className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">
                 {userProfile?.full_name || userProfile?.email || 'Agent'}
               </span>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleSignOut}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 text-foreground hover:bg-primary/20"
               title="Sign Out"
             >
               <LogOut className="h-4 w-4" />

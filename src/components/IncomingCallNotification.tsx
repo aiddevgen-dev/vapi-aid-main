@@ -59,26 +59,26 @@ export const IncomingCallNotification = ({
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-pulse">
-      <Card className="w-80 bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 shadow-xl">
+      <Card className="w-80 bg-card border-2 border-green-500/50 shadow-xl shadow-green-500/20">
         <CardHeader className="pb-3">
-          <CardTitle className="text-green-800 flex items-center gap-2">
+          <CardTitle className="text-green-400 flex items-center gap-2">
             <Phone className="h-5 w-5 animate-bounce" />
             Incoming Call
-            <Badge variant="secondary" className="ml-auto">
+            <Badge variant="secondary" className="ml-auto bg-primary/20 text-foreground">
               {Math.floor(ringingDuration / 60)}:{(ringingDuration % 60).toString().padStart(2, '0')}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="bg-green-100 p-2 rounded-full">
-              <User className="h-6 w-6 text-green-700" />
+            <div className="bg-green-500/20 p-2 rounded-full">
+              <User className="h-6 w-6 text-green-400" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">
+              <p className="font-semibold text-foreground">
                 {incomingCall.customer_number}
               </p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 {incomingCall.call_direction} call
               </p>
             </div>
