@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Eye, EyeOff, Users, Phone, PhoneIncoming, PhoneOutgoing, BarChart3, Clock, TrendingUp, ChevronDown, ChevronUp, MessageSquare, User, Mail, Activity, CheckCircle, XCircle, Calendar } from 'lucide-react';
+import { Loader2, Plus, Eye, EyeOff, Users, Phone, PhoneIncoming, PhoneOutgoing, BarChart3, Clock, TrendingUp, ChevronDown, ChevronUp, MessageSquare, User, Mail, Activity, CheckCircle, XCircle, Calendar, Trash2, Target, MapPin } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
@@ -80,6 +80,19 @@ interface Transcript {
   created_at: string;
 }
 
+interface Lead {
+  id: string;
+  company_id: string;
+  name: string;
+  email: string | null;
+  phone_number: string;
+  security_pin: string;
+  address: string;
+  intent: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const CompanyDashboard = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -108,6 +121,16 @@ export const CompanyDashboard = () => {
   const [agentEmail, setAgentEmail] = useState('');
   const [agentPassword, setAgentPassword] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
+
+  // Leads
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [creatingLead, setCreatingLead] = useState(false);
+  const [leadName, setLeadName] = useState('');
+  const [leadEmail, setLeadEmail] = useState('');
+  const [leadPhoneNumber, setLeadPhoneNumber] = useState('');
+  const [leadSecurityPin, setLeadSecurityPin] = useState('');
+  const [leadAddress, setLeadAddress] = useState('');
+  const [leadIntent, setLeadIntent] = useState('');
 
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
@@ -196,6 +219,7 @@ export const CompanyDashboard = () => {
       await fetchCallStats(companyData.id);
       await fetchAgentPerformance(companyData.id);
       await fetchRecentCalls(companyData.id);
+      await fetchLeads(companyData.id);
     } catch (error: any) {
       console.error('Error fetching company data:', error);
       toast({
@@ -366,6 +390,107 @@ export const CompanyDashboard = () => {
       setHasMoreCalls((count || 0) > limit);
     } catch (error) {
       console.error('Error fetching recent calls:', error);
+    }
+  };
+
+  const fetchLeads = async (companyId: string) => {
+    try {
+      // Note: 'leads' table needs to be created - cast to any until types are regenerated
+      const { data, error } = await (supabase as any)
+        .from('leads')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setLeads((data as Lead[]) || []);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+    }
+  };
+
+  const handleCreateLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!company) return;
+
+    // Validate security pin is exactly 4 digits
+    if (!/^\d{4}$/.test(leadSecurityPin)) {
+      toast({
+        title: "Invalid Security PIN",
+        description: "Security PIN must be exactly 4 digits",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCreatingLead(true);
+    try {
+      // Note: 'leads' table needs to be created - cast to any until types are regenerated
+      const { error } = await (supabase as any)
+        .from('leads')
+        .insert({
+          company_id: company.id,
+          name: leadName,
+          email: leadEmail || null,
+          phone_number: leadPhoneNumber,
+          security_pin: leadSecurityPin,
+          address: leadAddress,
+          intent: leadIntent,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Lead Created",
+        description: `${leadName} has been added to your leads.`,
+      });
+
+      // Reset form
+      setLeadName('');
+      setLeadEmail('');
+      setLeadPhoneNumber('');
+      setLeadSecurityPin('');
+      setLeadAddress('');
+      setLeadIntent('');
+
+      // Refresh leads
+      await fetchLeads(company.id);
+    } catch (error: any) {
+      console.error('Error creating lead:', error);
+      toast({
+        title: "Failed to Create Lead",
+        description: error.message || "An error occurred while creating the lead",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingLead(false);
+    }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!company) return;
+    try {
+      // Note: 'leads' table needs to be created - cast to any until types are regenerated
+      const { error } = await (supabase as any)
+        .from('leads')
+        .delete()
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Lead Deleted",
+        description: "The lead has been removed.",
+      });
+
+      await fetchLeads(company.id);
+    } catch (error: any) {
+      console.error('Error deleting lead:', error);
+      toast({
+        title: "Failed to Delete Lead",
+        description: error.message || "An error occurred while deleting the lead",
+        variant: "destructive",
+      });
     }
   };
 
@@ -592,6 +717,8 @@ export const CompanyDashboard = () => {
             <TabsTrigger value="agents">My Agents</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="calls">Call History</TabsTrigger>
+            <TabsTrigger value="leads">Current Leads</TabsTrigger>
+            <TabsTrigger value="add-lead">Add Lead</TabsTrigger>
             <TabsTrigger value="create">Create Agent</TabsTrigger>
             {newlyCreatedAgents.length > 0 && (
               <TabsTrigger value="credentials">
@@ -1098,6 +1225,209 @@ export const CompanyDashboard = () => {
                       <>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Agent
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Current Leads */}
+          <TabsContent value="leads">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight">Current Leads</h2>
+                  <p className="text-muted-foreground">View and manage your leads for outbound calls</p>
+                </div>
+                <Badge variant="outline" className="text-sm">
+                  {leads.length} Lead{leads.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+
+              {leads.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Target className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Leads Yet</h3>
+                    <p className="text-muted-foreground text-center mb-4">
+                      Add leads to help agents with intent detection during outbound calls
+                    </p>
+                    <Button onClick={() => document.querySelector('[value="add-lead"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Lead
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>PIN</TableHead>
+                          <TableHead>Address</TableHead>
+                          <TableHead>Intent</TableHead>
+                          <TableHead className="w-16"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {leads.map((lead) => (
+                          <TableRow key={lead.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                {lead.name}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 max-w-[150px]">
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                <span className="truncate text-sm">{lead.email || '-'}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                <span className="font-mono text-sm">{lead.phone_number}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <code className="bg-muted px-2 py-1 rounded text-sm">{lead.security_pin}</code>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 max-w-[120px]">
+                                <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className="truncate text-sm">{lead.address}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 max-w-[150px]">
+                                <Target className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className="truncate text-sm">{lead.intent}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteLead(lead.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Add Lead Form */}
+          <TabsContent value="add-lead">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add New Lead</CardTitle>
+                <CardDescription>
+                  Add a lead with their details for intent detection during outbound calls
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateLead} className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="lead-name">Lead Name</Label>
+                      <Input
+                        id="lead-name"
+                        placeholder="John Smith"
+                        value={leadName}
+                        onChange={(e) => setLeadName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lead-email">Email</Label>
+                      <Input
+                        id="lead-email"
+                        type="email"
+                        placeholder="john@example.com"
+                        value={leadEmail}
+                        onChange={(e) => setLeadEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lead-phone">Phone Number</Label>
+                      <Input
+                        id="lead-phone"
+                        type="tel"
+                        placeholder="+1234567890"
+                        value={leadPhoneNumber}
+                        onChange={(e) => setLeadPhoneNumber(e.target.value)}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Number agent will call for this lead
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lead-pin">Security PIN (4 digits)</Label>
+                      <Input
+                        id="lead-pin"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d{4}"
+                        maxLength={4}
+                        placeholder="1234"
+                        value={leadSecurityPin}
+                        onChange={(e) => setLeadSecurityPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Used for customer verification during calls
+                      </p>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="lead-address">Address</Label>
+                      <Input
+                        id="lead-address"
+                        placeholder="123 Main St, City, State 12345"
+                        value={leadAddress}
+                        onChange={(e) => setLeadAddress(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="lead-intent">Intent</Label>
+                      <Input
+                        id="lead-intent"
+                        placeholder="e.g., Schedule follow-up appointment, Confirm order delivery"
+                        value={leadIntent}
+                        onChange={(e) => setLeadIntent(e.target.value)}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The purpose or goal for contacting this lead
+                      </p>
+                    </div>
+                  </div>
+                  <Button type="submit" disabled={creatingLead} className="w-full">
+                    {creatingLead ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Adding Lead...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Lead
                       </>
                     )}
                   </Button>
