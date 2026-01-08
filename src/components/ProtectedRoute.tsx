@@ -32,7 +32,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (requiredRole && userProfile.role !== requiredRole) {
     // Redirect based on their actual role
     if (userProfile.role === 'agent') {
-      return <Navigate to="/agent" replace />;
+      return <Navigate to="/pink-mobile" replace />;
     } else if (userProfile.role === 'company') {
       return <Navigate to="/company" replace />;
     } else {

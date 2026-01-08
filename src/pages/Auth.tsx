@@ -53,7 +53,7 @@ export const Auth = () => {
     } else if (user && userProfile) {
       // Only redirect if we're not on the auth page for logout purposes
       if (userProfile.role === 'agent') {
-        navigate('/agent');
+        navigate('/pink-mobile');
       } else if (userProfile.role === 'company') {
         navigate('/company');
       } else {
@@ -343,7 +343,7 @@ export const Auth = () => {
                     className="w-full border-primary/50 text-foreground hover:bg-primary/20"
                     onClick={() => {
                       if (userProfile?.role === 'agent') {
-                        navigate('/agent');
+                        navigate('/pink-mobile');
                       } else if (userProfile?.role === 'company') {
                         navigate('/company');
                       } else {

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, MessageSquare, BarChart3, LogOut, User } from 'lucide-react';
+import { Phone, MessageSquare, BarChart3, LogOut, User, ArrowLeft } from 'lucide-react';
 import { CallCenterLayout } from './CallCenterLayout';
 import { AgentDashboard } from './AgentDashboard';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 type DashboardMode = 'call-center' | 'chat-support' | 'analytics';
 
@@ -14,6 +15,7 @@ export const UnifiedAgentDashboard = () => {
   const [mode, setMode] = useState<DashboardMode>('call-center');
   const { userProfile, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSignOut = async () => {
     try {
@@ -36,6 +38,15 @@ export const UnifiedAgentDashboard = () => {
       {/* Header with Mode Toggle */}
       <header className="h-14 flex items-center justify-between px-4 border-b bg-background z-20 flex-shrink-0">
         <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/pink-mobile')}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <div className="flex flex-col">
             <h1 className="text-xl font-bold text-foreground">Lyric.ai</h1>
             <span className="text-xs text-muted-foreground">Contact Centre</span>

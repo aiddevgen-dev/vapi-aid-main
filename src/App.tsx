@@ -8,6 +8,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { EcommerceLayout } from "./components/EcommerceLayout";
 import { UnifiedAgentDashboard } from "./components/UnifiedAgentDashboard";
 import { CompanyDashboard } from "./pages/CompanyDashboard";
+import { PinkMobileDashboard } from "./pages/PinkMobileDashboard";
 import { Auth } from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,14 @@ const App = () => (
             element={
               <ProtectedRoute requiredRole="company">
                 <CompanyDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pink-mobile"
+            element={
+              <ProtectedRoute requiredRole="agent">
+                <PinkMobileDashboard />
               </ProtectedRoute>
             }
           />
