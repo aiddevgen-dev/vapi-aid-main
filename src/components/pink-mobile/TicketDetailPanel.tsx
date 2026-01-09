@@ -7,7 +7,6 @@ import {
   User,
   Target,
   CheckCircle,
-  Package,
   DollarSign,
   Clock,
   FileText,
@@ -19,60 +18,7 @@ interface TicketDetailPanelProps {
   selectedSession: AISession | null;
 }
 
-// Demo ticket data based on session
-const getTicketDetails = (session: AISession | null) => {
-  if (!session) return null;
-
-  // Demo data mapping
-  const ticketData: Record<string, {
-    intents: string[];
-    actions: string[];
-    details?: string[];
-  }> = {
-    '1': {
-      intents: ['Add Line', 'Promo Eligibility', 'Device Add', 'Shipping Confirmation'],
-      actions: [
-        'Added new iPhone line',
-        'Added tablet line',
-        'Applied 5-Line Free iPad promo',
-        'Confirmed shipping to Garden Terrace',
-      ],
-    },
-    '2': {
-      intents: ['Roaming Inquiry', 'Feature Activation'],
-      actions: [
-        'Explained Europe roaming pass',
-        'Activated travel pass ($10/day)',
-        'Set dates: June 10-20',
-        'Confirmed auto-stop on return',
-      ],
-      details: [
-        'Europe Pass (Unlimited Voice/Text)',
-        '10 USD/day when roaming',
-        'Active: June 10-20',
-        'Auto-stop on return',
-      ],
-    },
-    '3': {
-      intents: ['Billing Question'],
-      actions: ['Currently explaining billing details...'],
-    },
-    '4': {
-      intents: ['Technical Support', 'Device Issue'],
-      actions: [
-        'Attempted troubleshooting',
-        'Issue requires technical specialist',
-        'Transferred to Contact Centre',
-      ],
-    },
-  };
-
-  return ticketData[session.id] || { intents: [session.intent], actions: [] };
-};
-
 export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) => {
-  const ticketDetails = getTicketDetails(selectedSession);
-
   if (!selectedSession) {
     return (
       <Card className="h-full flex flex-col bg-card border-border">
@@ -88,6 +34,9 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
       </Card>
     );
   }
+
+  const intents = selectedSession.intents_detected || [selectedSession.intent];
+  const actions = selectedSession.actions_taken || [];
 
   return (
     <Card className="h-full flex flex-col bg-card border-border">
@@ -140,7 +89,7 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
                 Intents Detected
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {ticketDetails?.intents.map((intent, i) => (
+                {intents.map((intent, i) => (
                   <Badge key={i} variant="secondary" className="text-xs">
                     {intent}
                   </Badge>
@@ -149,35 +98,20 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
             </div>
 
             {/* Actions Taken */}
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                <CheckCircle className="h-3 w-3" />
-                Actions Taken
-              </h4>
-              <div className="space-y-1.5">
-                {ticketDetails?.actions.map((action, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2 text-sm p-2 rounded bg-green-500/10 border border-green-500/20"
-                  >
-                    <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>{action}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Additional Details if exists */}
-            {ticketDetails?.details && (
+            {actions.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                  <Package className="h-3 w-3" />
-                  Details
+                  <CheckCircle className="h-3 w-3" />
+                  Actions Taken
                 </h4>
-                <div className="space-y-1">
-                  {ticketDetails.details.map((detail, i) => (
-                    <div key={i} className="text-sm text-muted-foreground pl-2 border-l-2 border-border">
-                      {detail}
+                <div className="space-y-1.5">
+                  {actions.map((action, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 text-sm p-2 rounded bg-green-500/10 border border-green-500/20"
+                    >
+                      <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>{action}</span>
                     </div>
                   ))}
                 </div>

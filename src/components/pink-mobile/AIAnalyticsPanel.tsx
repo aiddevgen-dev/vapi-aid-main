@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,41 +13,136 @@ import {
   ThumbsUp,
   AlertTriangle,
   BarChart3,
+  Loader2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 export const AIAnalyticsPanel = () => {
-  // Demo analytics data
-  const metrics = {
-    automationRate: 92,
-    avgHandleTime: '3m 24s',
-    intentConfidence: 94,
-    customerConfirmation: 89,
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({
+    automationRate: 0,
+    avgHandleTime: '0m 0s',
+    totalSessions: 0,
+    completedSessions: 0,
+    escalatedSessions: 0,
+  });
+  const [topIntents, setTopIntents] = useState<{ name: string; count: number; percent: number }[]>([]);
+  const [promoStats, setPromoStats] = useState({ presented: 0, accepted: 0, acceptanceRate: 0 });
+  const [escalationReasons, setEscalationReasons] = useState<{ reason: string; count: number }[]>([]);
+
+  useEffect(() => {
+    fetchAnalytics();
+
+    const channel = supabase
+      .channel('ai_sessions_analytics')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_sessions' }, () => {
+        fetchAnalytics();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchAnalytics = async () => {
+    const { data: sessions, error } = await supabase
+      .from('ai_sessions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching analytics:', error);
+      setLoading(false);
+      return;
+    }
+
+    if (!sessions || sessions.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Calculate metrics
+    const total = sessions.length;
+    const completed = sessions.filter((s: any) => s.status === 'completed').length;
+    const escalated = sessions.filter((s: any) => s.status === 'escalated').length;
+    const automationRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // Calculate avg handle time
+    const completedWithTime = sessions.filter((s: any) => s.status === 'completed' && s.ended_at && s.started_at);
+    let avgMs = 0;
+    if (completedWithTime.length > 0) {
+      const totalMs = completedWithTime.reduce((sum: number, s: any) => {
+        return sum + (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime());
+      }, 0);
+      avgMs = totalMs / completedWithTime.length;
+    }
+    const avgMins = Math.floor(avgMs / 60000);
+    const avgSecs = Math.floor((avgMs % 60000) / 1000);
+    const avgHandleTime = `${avgMins}m ${avgSecs}s`;
+
+    setMetrics({
+      automationRate,
+      avgHandleTime,
+      totalSessions: total,
+      completedSessions: completed,
+      escalatedSessions: escalated,
+    });
+
+    // Calculate top intents
+    const intentCounts: Record<string, number> = {};
+    sessions.forEach((s: any) => {
+      if (s.intent) {
+        intentCounts[s.intent] = (intentCounts[s.intent] || 0) + 1;
+      }
+    });
+    const sortedIntents = Object.entries(intentCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percent: Math.round((count / total) * 100),
+      }));
+    setTopIntents(sortedIntents);
+
+    // Calculate promo stats
+    const withPromo = sessions.filter((s: any) => s.promo);
+    const promoAccepted = withPromo.filter((s: any) => s.status === 'completed' && s.outcome);
+    setPromoStats({
+      presented: withPromo.length,
+      accepted: promoAccepted.length,
+      acceptanceRate: withPromo.length > 0 ? Math.round((promoAccepted.length / withPromo.length) * 100) : 0,
+    });
+
+    // Escalation reasons (from escalated sessions' intents)
+    const escalationCounts: Record<string, number> = {};
+    sessions.filter((s: any) => s.status === 'escalated').forEach((s: any) => {
+      const reason = s.intent || 'Unknown';
+      escalationCounts[reason] = (escalationCounts[reason] || 0) + 1;
+    });
+    setEscalationReasons(
+      Object.entries(escalationCounts).map(([reason, count]) => ({ reason, count }))
+    );
+
+    setLoading(false);
   };
 
-  const topIntents = [
-    { name: 'Add a Line', count: 156, percent: 35 },
-    { name: 'Roaming', count: 98, percent: 22 },
-    { name: 'Billing Explanation', count: 87, percent: 19 },
-    { name: 'Device Support', count: 65, percent: 14 },
-    { name: 'Plan Changes', count: 44, percent: 10 },
-  ];
-
-  const promoStats = {
-    presented: 128,
-    accepted: 63,
-    acceptanceRate: 49,
-  };
-
-  const roamingStats = {
-    total: 412,
-    avgSpend: 74,
-  };
-
-  const escalationReasons = [
-    { reason: 'Technical Issue', count: 12 },
-    { reason: 'Customer Request', count: 8 },
-    { reason: 'Complex Billing', count: 5 },
-  ];
+  if (loading) {
+    return (
+      <Card className="h-full flex flex-col bg-card border-border">
+        <CardHeader className="pb-3 flex-shrink-0 border-b">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Analytics Overview
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="h-full flex flex-col bg-card border-border">
@@ -81,105 +177,93 @@ export const AIAnalyticsPanel = () => {
                 <p className="text-[10px] text-muted-foreground mt-1">AI-only sessions</p>
               </div>
 
-              {/* Intent Confidence */}
+              {/* Total Sessions */}
               <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
                 <div className="flex items-center gap-2 mb-1">
                   <Target className="h-4 w-4 text-purple-600" />
-                  <span className="text-xs text-purple-600 font-medium">Intent Confidence</span>
+                  <span className="text-xs text-purple-600 font-medium">Total Sessions</span>
                 </div>
-                <p className="text-2xl font-bold text-purple-600">{metrics.intentConfidence}%</p>
-                <Progress value={metrics.intentConfidence} className="h-1 mt-2" />
+                <p className="text-2xl font-bold text-purple-600">{metrics.totalSessions}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{metrics.completedSessions} completed</p>
               </div>
 
-              {/* Customer Confirmation */}
-              <div className="p-3 rounded-lg bg-pink-500/10 border border-pink-500/30">
+              {/* Escalations */}
+              <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
                 <div className="flex items-center gap-2 mb-1">
-                  <ThumbsUp className="h-4 w-4 text-pink-600" />
-                  <span className="text-xs text-pink-600 font-medium">Understanding Confirmed</span>
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <span className="text-xs text-orange-600 font-medium">Escalations</span>
                 </div>
-                <p className="text-2xl font-bold text-pink-600">{metrics.customerConfirmation}%</p>
-                <Progress value={metrics.customerConfirmation} className="h-1 mt-2" />
+                <p className="text-2xl font-bold text-orange-600">{metrics.escalatedSessions}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">transferred to agents</p>
               </div>
             </div>
 
             {/* Top Intents */}
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Top Intents This Week
-              </h4>
-              <div className="space-y-2">
-                {topIntents.map((intent, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <div className="w-24 text-xs truncate">{intent.name}</div>
-                    <div className="flex-1">
-                      <Progress value={intent.percent} className="h-2" />
+            {topIntents.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Top Intents
+                </h4>
+                <div className="space-y-2">
+                  {topIntents.map((intent, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-24 text-xs truncate">{intent.name}</div>
+                      <div className="flex-1">
+                        <Progress value={intent.percent} className="h-2" />
+                      </div>
+                      <div className="w-10 text-xs text-right text-muted-foreground">{intent.count}</div>
                     </div>
-                    <div className="w-10 text-xs text-right text-muted-foreground">{intent.count}</div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Promo Stats */}
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <Gift className="h-4 w-4 text-pink-600" />
-                <span className="text-sm font-medium">Promo Acceptance Rate</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <p className="text-lg font-bold">{promoStats.presented}</p>
-                  <p className="text-[10px] text-muted-foreground">Presented</p>
+            {promoStats.presented > 0 && (
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Gift className="h-4 w-4 text-pink-600" />
+                  <span className="text-sm font-medium">Promo Acceptance Rate</span>
                 </div>
-                <div>
-                  <p className="text-lg font-bold text-green-600">{promoStats.accepted}</p>
-                  <p className="text-[10px] text-muted-foreground">Accepted</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-pink-600">{promoStats.acceptanceRate}%</p>
-                  <p className="text-[10px] text-muted-foreground">Rate</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Roaming Stats */}
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <Plane className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium">Roaming Activations</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div>
-                  <p className="text-lg font-bold">{roamingStats.total}</p>
-                  <p className="text-[10px] text-muted-foreground">Total Activations</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-green-600">${roamingStats.avgSpend}</p>
-                  <p className="text-[10px] text-muted-foreground">Avg Spend/Traveler</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-lg font-bold">{promoStats.presented}</p>
+                    <p className="text-[10px] text-muted-foreground">Presented</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-green-600">{promoStats.accepted}</p>
+                    <p className="text-[10px] text-muted-foreground">Accepted</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-pink-600">{promoStats.acceptanceRate}%</p>
+                    <p className="text-[10px] text-muted-foreground">Rate</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Escalation Reasons */}
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                <AlertTriangle className="h-3 w-3" />
-                Escalation Reasons
-              </h4>
-              <div className="space-y-1.5">
-                {escalationReasons.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between p-2 rounded bg-orange-500/10 border border-orange-500/20"
-                  >
-                    <span className="text-xs">{item.reason}</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {item.count}
-                    </Badge>
-                  </div>
-                ))}
+            {escalationReasons.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-3 w-3" />
+                  Escalation Reasons
+                </h4>
+                <div className="space-y-1.5">
+                  {escalationReasons.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-2 rounded bg-orange-500/10 border border-orange-500/20"
+                    >
+                      <span className="text-xs">{item.reason}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {item.count}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </ScrollArea>
       </CardContent>

@@ -22,6 +22,8 @@ export interface AISession {
   started_at: string;
   ended_at?: string;
   ticket_id?: string;
+  intents_detected?: string[];
+  actions_taken?: string[];
 }
 
 export interface AITicket {
