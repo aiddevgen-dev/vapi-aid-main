@@ -9,9 +9,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Eye, EyeOff, Users, Phone, PhoneIncoming, PhoneOutgoing, BarChart3, Clock, TrendingUp, ChevronDown, ChevronUp, MessageSquare, User, Mail, Activity, CheckCircle, XCircle, Calendar, Trash2, Target, MapPin } from 'lucide-react';
+import { Loader2, Plus, Eye, EyeOff, Users, Phone, PhoneIncoming, PhoneOutgoing, BarChart3, Clock, TrendingUp, ChevronDown, ChevronUp, MessageSquare, User, Mail, Activity, CheckCircle, XCircle, Calendar, Trash2, Target, MapPin, LogOut } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+
+// New imports for the redesigned dashboard
+import { Sidebar, SidebarSection } from '@/components/company-dashboard/Sidebar';
+import { DashboardOverview } from '@/components/company-dashboard/DashboardOverview';
+import { AIAgentsList } from '@/components/company-dashboard/ai-agents';
+import { KnowledgeBaseList } from '@/components/company-dashboard/knowledge-base';
+import { WorkflowsList } from '@/components/company-dashboard/workflows';
+import {
+  IntegrationsOverview,
+  ZendeskIntegration,
+  WhatsAppIntegration,
+  AvayaIntegration,
+  EmailIntegration,
+  SalesforceIntegration,
+  HubSpotIntegration,
+  ZohoCRMIntegration,
+  PipedriveIntegration,
+  CustomIntegration,
+} from '@/components/company-dashboard/integrations';
 
 interface Company {
   id: string;
@@ -94,6 +113,9 @@ interface Lead {
 }
 
 export const CompanyDashboard = () => {
+  // Sidebar navigation state
+  const [activeSection, setActiveSection] = useState<SidebarSection>('dashboard');
+
   const [company, setCompany] = useState<Company | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -612,6 +634,16 @@ export const CompanyDashboard = () => {
     }));
   };
 
+  // Handle navigation from sidebar
+  const handleSectionChange = (section: SidebarSection) => {
+    setActiveSection(section);
+  };
+
+  // Handle navigation from other components (like dashboard quick actions)
+  const handleNavigate = (section: string) => {
+    setActiveSection(section as SidebarSection);
+  };
+
   if (loading) {
     return (
       <div className="lyric-theme min-h-screen flex items-center justify-center bg-background">
@@ -620,110 +652,131 @@ export const CompanyDashboard = () => {
     );
   }
 
-  return (
-    <div className="lyric-theme min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="flex flex-col">
-                <h1 className="text-2xl font-bold text-foreground">Lyric.ai</h1>
-                <span className="text-xs text-muted-foreground">Admin Portal For Contact Centre</span>
-              </div>
-              <div className="h-8 w-px bg-border"></div>
-              <span className="text-xl font-semibold text-foreground">{company?.company_name}</span>
-            </div>
+  // Render the appropriate section content
+  const renderContent = () => {
+    switch (activeSection) {
+      case 'dashboard':
+        return <DashboardOverview onNavigate={handleNavigate} />;
+      case 'ai-agents':
+        return <AIAgentsList />;
+      case 'knowledge-base':
+        return <KnowledgeBaseList />;
+      case 'workflows':
+        return <WorkflowsList />;
+      case 'integrations':
+        return <IntegrationsOverview onNavigate={handleNavigate} />;
+      case 'whatsapp':
+        return <WhatsAppIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'zendesk':
+        return <ZendeskIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'avaya':
+        return <AvayaIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'email':
+        return <EmailIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'salesforce':
+        return <SalesforceIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'hubspot':
+        return <HubSpotIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'zoho':
+        return <ZohoCRMIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'pipedrive':
+        return <PipedriveIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'custom':
+        return <CustomIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'call-history':
+      case 'leads':
+      case 'human-agents':
+        // These use the original tabs-based interface
+        return renderOperationsContent();
+      case 'settings':
+      case 'api-keys':
+        return (
+          <div className="space-y-6">
+            <h1 className="text-2xl font-bold capitalize">{activeSection.replace('-', ' ')}</h1>
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <p className="text-muted-foreground">Settings coming soon...</p>
+              </CardContent>
+            </Card>
           </div>
-          <Button variant="outline" onClick={() => navigate('/auth?action=logout')} className="border-primary/50 text-foreground hover:bg-primary/20">
-            Sign Out
-          </Button>
-        </div>
+        );
+      default:
+        return <DashboardOverview onNavigate={handleNavigate} />;
+    }
+  };
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{agents.length}</div>
-              <p className="text-xs text-muted-foreground">Active team members</p>
-            </CardContent>
-          </Card>
+  // Render the original Operations content (preserved exactly)
+  const renderOperationsContent = () => {
+    // Determine which tab to show based on active section
+    const defaultTab = activeSection === 'call-history' ? 'calls'
+      : activeSection === 'leads' ? 'leads'
+      : 'agents';
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Online Agents</CardTitle>
-              <div className="h-2 w-2 bg-green-500 rounded-full" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {agents.filter((a) => a.status === 'online').length}
-              </div>
-              <p className="text-xs text-muted-foreground">Currently active</p>
-            </CardContent>
-          </Card>
+    return (
+      <div className="space-y-6">
+        {/* Stats Cards - Only show for human-agents */}
+        {activeSection === 'human-agents' && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{agents.length}</div>
+                <p className="text-xs text-muted-foreground">Active team members</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
-              <Phone className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callStats.totalCalls}</div>
-              <p className="text-xs text-muted-foreground">All time</p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Online Agents</CardTitle>
+                <div className="h-2 w-2 bg-green-500 rounded-full" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {agents.filter((a) => a.status === 'online').length}
+                </div>
+                <p className="text-xs text-muted-foreground">Currently active</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Calls Today</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callStats.callsToday}</div>
-              <p className="text-xs text-muted-foreground">Since midnight</p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+                <Phone className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{callStats.totalCalls}</div>
+                <p className="text-xs text-muted-foreground">All time</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Call Duration</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callStats.avgDuration}s</div>
-              <p className="text-xs text-muted-foreground">Average time</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{callStats.successRate}%</div>
-              <p className="text-xs text-muted-foreground">Completed calls</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main Content */}
-        <Tabs defaultValue="agents" className="space-y-4">
+        {/* Main Content - Original Tabs */}
+        <Tabs defaultValue={defaultTab} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="agents">My Agents</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="calls">Call History</TabsTrigger>
-            <TabsTrigger value="leads">Current Leads</TabsTrigger>
-            <TabsTrigger value="add-lead">Add Lead</TabsTrigger>
-            <TabsTrigger value="create">Create Agent</TabsTrigger>
-            {newlyCreatedAgents.length > 0 && (
-              <TabsTrigger value="credentials">
-                Credentials ({newlyCreatedAgents.length})
-              </TabsTrigger>
+            {activeSection === 'human-agents' && (
+              <>
+                <TabsTrigger value="agents">My Agents</TabsTrigger>
+                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="create">Create Agent</TabsTrigger>
+                {newlyCreatedAgents.length > 0 && (
+                  <TabsTrigger value="credentials">
+                    Credentials ({newlyCreatedAgents.length})
+                  </TabsTrigger>
+                )}
+              </>
+            )}
+            {activeSection === 'call-history' && (
+              <TabsTrigger value="calls">Call History</TabsTrigger>
+            )}
+            {activeSection === 'leads' && (
+              <>
+                <TabsTrigger value="leads">Current Leads</TabsTrigger>
+                <TabsTrigger value="add-lead">Add Lead</TabsTrigger>
+              </>
             )}
           </TabsList>
 
@@ -1494,6 +1547,34 @@ export const CompanyDashboard = () => {
             </TabsContent>
           )}
         </Tabs>
+      </div>
+    );
+  };
+
+  return (
+    <div className="lyric-theme min-h-screen flex bg-background">
+      {/* Sidebar */}
+      <Sidebar activeSection={activeSection} onSectionChange={handleSectionChange} />
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        {/* Top Header Bar */}
+        <div className="sticky top-0 z-10 bg-background border-b px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {company?.company_name || 'Company Dashboard'}
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/auth?action=logout')} className="gap-2">
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
+        </div>
+
+        {/* Page Content */}
+        <div className="p-6">
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

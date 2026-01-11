@@ -50,7 +50,7 @@ export const AgentSidebar = ({
               <MessageCircle className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="font-semibold">Lyric.ai Chat</h2>
+              <h2 className="font-semibold">lyriq.ai Chat</h2>
               <p className="text-sm text-muted-foreground">
                 {sessions.length} active sessions
               </p>

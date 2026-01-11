@@ -48,7 +48,7 @@ export const UnifiedAgentDashboard = () => {
             Back
           </Button>
           <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-foreground">Lyric.ai</h1>
+            <h1 className="text-xl font-bold text-foreground">lyriq.ai </h1>
             <span className="text-xs text-muted-foreground">Contact Centre</span>
           </div>
           <Badge variant="outline" className="text-xs border-primary/50 text-foreground">

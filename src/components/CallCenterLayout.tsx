@@ -1070,7 +1070,7 @@ export const CallCenterLayout = ({ showHeader = true }: CallCenterLayoutProps) =
           <header className="absolute top-0 left-0 right-0 h-12 flex items-center border-b bg-background z-10">
             <SidebarTrigger className="ml-2" />
             <div className="flex-1 text-center">
-              <h1 className="text-lg font-semibold">Lyric.ai Contact Centre</h1>
+              <h1 className="text-lg font-semibold">lyriq.ai Contact Centre</h1>
             </div>
             <button 
               onClick={simulateIncomingCall}

@@ -176,7 +176,7 @@ export const Auth = () => {
           <div className="w-16 h-16 mx-auto mb-2 bg-primary rounded-xl flex items-center justify-center">
             <span className="text-2xl font-bold text-primary-foreground">L</span>
           </div>
-          <CardTitle className="text-2xl font-bold text-foreground">Lyric.ai</CardTitle>
+          <CardTitle className="text-2xl font-bold text-foreground">lyriq.ai </CardTitle>
           <CardDescription className="text-muted-foreground">
             Contact Centre Portal - Sign in to access your dashboard
           </CardDescription>
