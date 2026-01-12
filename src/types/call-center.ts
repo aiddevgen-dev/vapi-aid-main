@@ -16,6 +16,7 @@ export interface Call {
   twilio_conference_sid?: string;
   call_status?: string;
   call_direction?: string;
+  call_type?: string;
   caller_country?: string;
   caller_state?: string;
   caller_city?: string;
@@ -27,6 +28,7 @@ export interface Call {
   first_response_time?: number;
   resolution_time?: number;
   notes?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface CustomerProfile {
