@@ -44,6 +44,7 @@ interface AIAgentCardProps {
   onDuplicate: (agent: AIAgent) => void;
   onToggleStatus: (agent: AIAgent) => void;
   onViewAnalytics: (agent: AIAgent) => void;
+  onViewDetails?: (agent: AIAgent) => void;
 }
 
 export const AIAgentCard: React.FC<AIAgentCardProps> = ({
@@ -53,7 +54,10 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
   onDuplicate,
   onToggleStatus,
   onViewAnalytics,
+  onViewDetails,
 }) => {
+  const isSaraAI = agent.id === 'sara-ai-pink-mobile';
+
   const avatarColors = [
     'bg-blue-500',
     'bg-green-500',
@@ -64,12 +68,13 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
   ];
 
   const getAvatarColor = (name: string) => {
+    if (isSaraAI) return 'bg-gradient-to-br from-pink-500 to-purple-600';
     const index = name.charCodeAt(0) % avatarColors.length;
     return avatarColors[index];
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+    <Card className={`overflow-hidden hover:shadow-lg transition-shadow ${isSaraAI ? 'border-2 border-pink-500/50 bg-gradient-to-br from-pink-500/5 to-purple-500/5' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -77,7 +82,14 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
               <Bot className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold text-lg">{agent.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-lg">{agent.name}</h3>
+                {isSaraAI && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-pink-500 text-white rounded font-medium">
+                    LIVE
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground line-clamp-1">{agent.description}</p>
             </div>
           </div>
@@ -88,23 +100,38 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(agent)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Agent
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDuplicate(agent)}>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onViewAnalytics(agent)}>
-                <BarChart3 className="mr-2 h-4 w-4" />
-                View Analytics
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onDelete(agent)} className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
+              {isSaraAI ? (
+                <>
+                  <DropdownMenuItem onClick={() => onEdit(agent)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    View Details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onViewAnalytics(agent)}>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    View Analytics
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => onEdit(agent)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Agent
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDuplicate(agent)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onViewAnalytics(agent)}>
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    View Analytics
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onDelete(agent)} className="text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -113,14 +140,16 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
         {/* Status Toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${agent.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <div className={`h-2 w-2 rounded-full ${agent.status === 'active' ? 'bg-green-500' : 'bg-gray-400'} ${isSaraAI && agent.status === 'active' ? 'animate-pulse' : ''}`} />
             <span className="text-sm text-muted-foreground">
               {agent.status === 'active' ? 'Active' : 'Inactive'}
+              {isSaraAI && ' (VAPI)'}
             </span>
           </div>
           <Switch
             checked={agent.status === 'active'}
             onCheckedChange={() => onToggleStatus(agent)}
+            disabled={isSaraAI}
           />
         </div>
 

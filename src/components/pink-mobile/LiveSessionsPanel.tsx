@@ -1,112 +1,206 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Phone, MessageSquare, TrendingUp, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Phone, PhoneIncoming, PhoneOutgoing, CheckCircle, Loader2, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AISession } from '@/pages/PinkMobileDashboard';
 
 interface LiveSessionsPanelProps {
   onSelectSession: (session: AISession) => void;
   selectedSessionId?: string;
+  refreshKey?: number;
 }
 
-export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId }: LiveSessionsPanelProps) => {
-  const [sessions, setSessions] = useState<AISession[]>([]);
+interface CallRecord {
+  id: string;
+  customer_number: string;
+  call_direction: 'inbound' | 'outbound';
+  call_status: string;
+  started_at: string;
+  ended_at?: string;
+  created_at: string;
+  agent_name?: string;
+}
+
+const CALLS_PER_PAGE = 10;
+
+export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshKey }: LiveSessionsPanelProps) => {
+  const [calls, setCalls] = useState<CallRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
+  const fetchCalls = useCallback(async (loadMore = false) => {
+    try {
+      if (loadMore) {
+        setLoadingMore(true);
+      }
+
+      const offset = loadMore ? calls.length : 0;
+
+      // First, always get active calls (no limit)
+      const { data: activeCalls, error: activeError } = await supabase
+        .from('calls')
+        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id')
+        .eq('call_status', 'in-progress')
+        .order('created_at', { ascending: false });
+
+      if (activeError) {
+        console.error('Error fetching active calls:', activeError);
+      }
+
+      // Then get completed/other calls with pagination
+      const { data: otherCalls, error: otherError, count } = await supabase
+        .from('calls')
+        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id', { count: 'exact' })
+        .neq('call_status', 'in-progress')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + CALLS_PER_PAGE - 1);
+
+      if (otherError) {
+        console.error('Error fetching calls:', otherError);
+        return;
+      }
+
+      // Combine: active calls first (not paginated), then completed calls (paginated)
+      const activeIds = new Set((activeCalls || []).map(c => c.id));
+      const filteredOther = (otherCalls || []).filter(c => !activeIds.has(c.id));
+
+      const allCallsData = loadMore
+        ? [...(activeCalls || []), ...calls.filter(c => c.call_status !== 'in-progress'), ...filteredOther]
+        : [...(activeCalls || []), ...filteredOther];
+
+      // Remove duplicates by id
+      const uniqueCalls = Array.from(new Map(allCallsData.map(c => [c.id, c])).values());
+
+      const mappedCalls: CallRecord[] = uniqueCalls.map(call => ({
+        id: call.id,
+        customer_number: call.customer_number || 'Unknown',
+        call_direction: (call.call_direction as 'inbound' | 'outbound') || 'inbound',
+        call_status: call.call_status || 'unknown',
+        started_at: call.started_at || call.created_at,
+        ended_at: call.ended_at,
+        created_at: call.created_at,
+        agent_name: 'Sara AI',
+      }));
+
+      setCalls(mappedCalls);
+      setLastUpdate(new Date());
+      setTotalCount(count || 0);
+      setHasMore((otherCalls?.length || 0) === CALLS_PER_PAGE);
+
+      console.log('LiveSessionsPanel - fetched calls:', mappedCalls.length, 'total completed:', count);
+    } catch (err) {
+      console.error('Error in fetchCalls:', err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [calls]);
+
+  // Initial fetch and realtime subscription
   useEffect(() => {
-    fetchSessions();
+    fetchCalls(false);
 
-    // Subscribe to realtime updates
+    // Subscribe to realtime changes on calls table
     const channel = supabase
-      .channel('ai_sessions_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_sessions' }, () => {
-        fetchSessions();
-      })
-      .subscribe();
+      .channel('live-calls')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'calls' },
+        (payload) => {
+          console.log('Realtime call update:', payload);
+          fetchCalls(false); // Refetch on any change
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  const fetchSessions = async () => {
-    const { data, error } = await supabase
-      .from('ai_sessions')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (error) {
-      console.error('Error fetching sessions:', error);
-    } else if (data) {
-      setSessions(data.map((s: any) => ({
-        id: s.id,
-        customer_name: s.customer_name,
-        customer_phone: s.customer_phone,
-        channel: s.channel as 'voice' | 'chat',
-        intent: s.intent || '',
-        promo: s.promo,
-        outcome: s.outcome,
-        financial_impact: s.financial_impact,
-        status: s.status as 'active' | 'completed' | 'escalated',
-        started_at: s.started_at,
-        ended_at: s.ended_at,
-        ticket_id: s.id.replace('sess_', 'PMK-'),
-        intents_detected: s.intents_detected,
-        actions_taken: s.actions_taken,
-      })));
+  // Refetch when refreshKey changes (triggered by parent after call is made)
+  useEffect(() => {
+    if (refreshKey && refreshKey > 0) {
+      console.log('Refreshing calls due to refreshKey change:', refreshKey);
+      fetchCalls(false);
     }
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
-  const getStatusIcon = (status: AISession['status']) => {
-    switch (status) {
-      case 'active':
-        return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
-      case 'completed':
-        return <CheckCircle className="h-3 w-3 text-green-500" />;
-      case 'escalated':
-        return <AlertCircle className="h-3 w-3 text-orange-500" />;
+  // Poll every 5 seconds when there are active calls (backup for realtime)
+  useEffect(() => {
+    const hasActiveCalls = calls.some(c => c.call_status === 'in-progress');
+
+    if (hasActiveCalls) {
+      console.log('Active calls detected, starting polling...');
+      const pollInterval = setInterval(() => {
+        console.log('Polling for call updates...');
+        fetchCalls(false);
+      }, 5000);
+
+      return () => clearInterval(pollInterval);
     }
+  }, [calls]);
+
+  const handleLoadMore = () => {
+    fetchCalls(true);
   };
 
-  const getStatusBadge = (status: AISession['status']) => {
-    switch (status) {
-      case 'active':
-        return <Badge className="text-[10px] bg-blue-500/20 text-blue-600 border-blue-500/30">Live</Badge>;
-      case 'completed':
-        return <Badge className="text-[10px] bg-green-500/20 text-green-600 border-green-500/30">AI Done</Badge>;
-      case 'escalated':
-        return <Badge className="text-[10px] bg-orange-500/20 text-orange-600 border-orange-500/30">Escalated</Badge>;
-    }
+  // Convert call to AISession format for compatibility
+  const callToSession = (call: CallRecord): AISession => ({
+    id: call.id,
+    customer_name: call.customer_number,
+    customer_phone: call.customer_number,
+    channel: 'voice',
+    intent: call.call_direction === 'inbound' ? 'Inbound Call' : 'Outbound Call',
+    status: call.call_status === 'in-progress' ? 'active' : 'completed',
+    started_at: call.started_at,
+    ended_at: call.ended_at,
+    ticket_id: `CALL-${call.id.slice(0, 8).toUpperCase()}`,
+  });
+
+  const formatDuration = (startedAt: string, endedAt?: string) => {
+    const start = new Date(startedAt).getTime();
+    const end = endedAt ? new Date(endedAt).getTime() : Date.now();
+    const seconds = Math.floor((end - start) / 1000);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getChannelIcon = (channel: AISession['channel']) => {
-    return channel === 'voice'
-      ? <Phone className="h-3 w-3" />
-      : <MessageSquare className="h-3 w-3" />;
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
-  const activeSessions = sessions.filter(s => s.status === 'active').length;
-  const completedToday = sessions.filter(s => s.status === 'completed').length;
+  const activeCalls = calls.filter(c => c.call_status === 'in-progress');
+  const completedCalls = calls.filter(c => c.call_status !== 'in-progress');
 
   return (
     <Card className="h-full flex flex-col bg-card border-border">
       <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="text-base flex items-center justify-between">
-          <span>Live Sessions</span>
+          <span>Live Calls</span>
           <div className="flex items-center gap-2">
-            {activeSessions > 0 && (
-              <Badge className="text-[10px] bg-blue-500 text-white animate-pulse">
-                {activeSessions} Active
+            {activeCalls.length > 0 && (
+              <Badge className="text-[10px] bg-green-500 text-white animate-pulse">
+                {activeCalls.length} Active
               </Badge>
             )}
           </div>
         </CardTitle>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{completedToday} completed today</span>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{totalCount} total calls ({completedCalls.length} shown)</span>
+          <span className="text-[10px]">Updated {formatTime(lastUpdate.toISOString())}</span>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
@@ -115,18 +209,74 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId }: LiveSe
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : sessions.length === 0 ? (
+          ) : calls.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              No sessions yet
+              No calls yet. Make an outbound call or receive an inbound call.
             </div>
           ) : (
             <div className="space-y-2">
-              {sessions.map((session) => (
+              {/* Active Calls First */}
+              {activeCalls.map((call) => (
                 <div
-                  key={session.id}
-                  onClick={() => onSelectSession(session)}
+                  key={call.id}
+                  onClick={() => onSelectSession(callToSession(call))}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    selectedSessionId === call.id
+                      ? 'border-pink-500 bg-pink-500/10'
+                      : 'border-green-500 bg-green-500/10 animate-pulse'
+                  }`}
+                >
+                  {/* Header Row */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-full ${
+                        call.call_direction === 'inbound'
+                          ? 'bg-blue-500/20 text-blue-500'
+                          : 'bg-pink-500/20 text-pink-500'
+                      }`}>
+                        {call.call_direction === 'inbound'
+                          ? <PhoneIncoming className="h-3 w-3" />
+                          : <PhoneOutgoing className="h-3 w-3" />
+                        }
+                      </div>
+                      <span className="font-medium text-sm font-mono">{call.customer_number}</span>
+                    </div>
+                    <Badge className="text-[10px] bg-green-500 text-white">
+                      LIVE
+                    </Badge>
+                  </div>
+
+                  {/* Call Info */}
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {call.call_direction === 'inbound' ? 'Inbound' : 'Outbound'} call via Sara AI
+                  </div>
+
+                  {/* Live Duration */}
+                  <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                    <Clock className="h-3 w-3 animate-pulse" />
+                    {formatDuration(call.started_at)} (live)
+                  </div>
+
+                  {/* Status indicator */}
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-1 text-[10px] text-green-600">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Sara handling call...</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatTime(call.started_at)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Completed Calls */}
+              {completedCalls.map((call) => (
+                <div
+                  key={call.id}
+                  onClick={() => onSelectSession(callToSession(call))}
                   className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                    selectedSessionId === session.id
+                    selectedSessionId === call.id
                       ? 'border-pink-500 bg-pink-500/10'
                       : 'border-border bg-muted/30 hover:bg-muted/50 hover:border-muted-foreground/30'
                   }`}
@@ -135,55 +285,70 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId }: LiveSe
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className={`p-1.5 rounded-full ${
-                        session.channel === 'voice' ? 'bg-green-500/20' : 'bg-blue-500/20'
+                        call.call_direction === 'inbound'
+                          ? 'bg-blue-500/20 text-blue-500'
+                          : 'bg-pink-500/20 text-pink-500'
                       }`}>
-                        {getChannelIcon(session.channel)}
+                        {call.call_direction === 'inbound'
+                          ? <PhoneIncoming className="h-3 w-3" />
+                          : <PhoneOutgoing className="h-3 w-3" />
+                        }
                       </div>
-                      <span className="font-medium text-sm">{session.customer_name}</span>
+                      <span className="font-medium text-sm font-mono">{call.customer_number}</span>
                     </div>
-                    {getStatusBadge(session.status)}
+                    <Badge className="text-[10px] bg-gray-500/20 text-gray-600 border-gray-500/30">
+                      {call.call_status}
+                    </Badge>
                   </div>
 
-                  {/* Intent */}
+                  {/* Call Info */}
                   <div className="text-xs text-muted-foreground mb-1">
-                    Intent: <span className="text-foreground font-medium">{session.intent}</span>
+                    {call.call_direction === 'inbound' ? 'Inbound' : 'Outbound'} call
                   </div>
 
-                  {/* Promo if exists */}
-                  {session.promo && (
-                    <div className="text-xs text-pink-600 mb-1">
-                      Promo: {session.promo}
-                    </div>
-                  )}
-
-                  {/* Outcome/Financial */}
-                  {session.outcome && (
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                      <TrendingUp className="h-3 w-3" />
-                      {session.outcome}
+                  {/* Duration */}
+                  {call.ended_at && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      Duration: {formatDuration(call.started_at, call.ended_at)}
                     </div>
                   )}
 
                   {/* Status indicator */}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      {getStatusIcon(session.status)}
-                      <span>
-                        {session.status === 'active'
-                          ? 'Sara handling...'
-                          : session.status === 'escalated'
-                          ? 'Transferred to agent'
-                          : 'Completed by AI'}
-                      </span>
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <span>Completed by AI</span>
                     </div>
-                    {session.ticket_id && (
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {session.ticket_id}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatTime(call.started_at)}
+                    </span>
                   </div>
                 </div>
               ))}
+
+              {/* Load More Button */}
+              {hasMore && completedCalls.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="w-full mt-2"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3 mr-2" />
+                      Load More ({totalCount - completedCalls.length} remaining)
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </ScrollArea>

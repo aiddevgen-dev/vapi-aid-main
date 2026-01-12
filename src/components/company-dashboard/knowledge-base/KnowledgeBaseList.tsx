@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -48,60 +48,107 @@ import {
   BookOpen,
   CheckCircle,
   XCircle,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { KnowledgeEntryForm, KnowledgeEntry } from './KnowledgeEntryForm';
 import { useToast } from '@/hooks/use-toast';
 
-// Mock data
+// Pink Mobile Knowledge Base Data
 const mockEntries: KnowledgeEntry[] = [
   {
     id: '1',
-    title: 'Return Policy',
-    content: 'Our return policy allows customers to return items within 30 days of purchase for a full refund...',
-    category: 'Policies',
-    tags: ['returns', 'refunds', 'policy'],
+    title: 'Pink Mobile Unlimited Plan',
+    content: 'Pink Mobile Unlimited Plan - $49.99/month. Features: Unlimited talk & text nationwide, Unlimited 5G/4G LTE data (slower speeds after 50GB), Mobile hotspot 15GB, International texting to 200+ countries, Free Pink Music streaming, No annual contract. Activation fee: $25 (waived online). AutoPay discount: $5/month off.',
+    category: 'Plans',
+    tags: ['unlimited', 'plans', 'pricing', '5G'],
     status: 'active',
-    updatedAt: '2024-01-15T10:30:00Z',
+    updatedAt: '2024-12-01T10:30:00Z',
   },
   {
     id: '2',
-    title: 'Product Warranty Information',
-    content: 'All products come with a 1-year manufacturer warranty covering defects in materials and workmanship...',
-    category: 'Products',
-    tags: ['warranty', 'products'],
+    title: 'Pink Mobile Basic Plan',
+    content: 'Pink Mobile Basic Plan - $29.99/month. Features: Unlimited talk & text, 5GB high-speed data (2G speeds after), No mobile hotspot, Domestic coverage only, No contract required. Best for light data users who primarily use WiFi. Can upgrade to Unlimited anytime with no penalty.',
+    category: 'Plans',
+    tags: ['basic', 'plans', 'budget', 'pricing'],
     status: 'active',
-    updatedAt: '2024-01-14T14:20:00Z',
+    updatedAt: '2024-12-01T10:00:00Z',
   },
   {
     id: '3',
-    title: 'Business Hours',
-    content: 'Our customer service is available Monday through Friday, 9 AM to 6 PM EST...',
-    category: 'Company',
-    tags: ['hours', 'contact'],
+    title: 'Pink Mobile Family Plan',
+    content: 'Pink Mobile Family Plan - Starting at $35/line/month. 4+ lines required for best pricing. Features per line: Unlimited talk, text, and data, Shared family controls, 10GB mobile hotspot each. Pricing: 2 lines $80/mo ($40/line), 3 lines $105/mo ($35/line), 4 lines $120/mo ($30/line), 5+ lines $25/line/month. Add tablets/watches at $10/month.',
+    category: 'Plans',
+    tags: ['family', 'plans', 'multi-line', 'pricing'],
     status: 'active',
-    updatedAt: '2024-01-13T09:00:00Z',
+    updatedAt: '2024-11-28T14:20:00Z',
   },
   {
     id: '4',
-    title: 'Shipping Information',
-    content: 'We offer free standard shipping on orders over $50. Express shipping is available for an additional fee...',
-    category: 'Shipping',
-    tags: ['shipping', 'delivery'],
+    title: 'Billing & Payment Options',
+    content: 'Payment Methods: Credit/Debit cards (Visa, Mastercard, Amex, Discover), Bank account (ACH), Pink Mobile gift cards, PayPal. Billing Cycle: Bills generated on activation date monthly, Payment due 21 days after, Late fee $5 after 15 days. AutoPay Benefits: $5/month discount per line, Never miss payment. To set up AutoPay say "I want to set up AutoPay".',
+    category: 'Billing',
+    tags: ['billing', 'payment', 'autopay'],
     status: 'active',
-    updatedAt: '2024-01-12T16:45:00Z',
+    updatedAt: '2024-11-25T09:00:00Z',
   },
   {
     id: '5',
-    title: 'Price Match Policy',
-    content: 'We offer price matching on identical items found at major retailers within 14 days of purchase...',
-    category: 'Policies',
-    tags: ['pricing', 'policy'],
-    status: 'inactive',
-    updatedAt: '2024-01-10T11:15:00Z',
+    title: 'Network Coverage & 5G',
+    content: '5G Coverage available in 500+ cities with speeds up to 1Gbps. Compatible devices required (iPhone 12+, Samsung S21+). 4G LTE Coverage: 99% population coverage, 25-50 Mbps average. Check coverage at pinkmobile.com/coverage. Domestic roaming included free. International roaming with Global Pass $10/day.',
+    category: 'Network',
+    tags: ['coverage', '5G', '4G', 'network'],
+    status: 'active',
+    updatedAt: '2024-11-20T16:45:00Z',
+  },
+  {
+    id: '6',
+    title: 'Device Upgrades & Trade-In',
+    content: 'Upgrade eligible after 12 months. Trade-In Values: iPhone 14 Pro up to $650, iPhone 13 up to $400, Samsung S23 up to $500, Samsung S22 up to $350. How to Trade In: Check value at pinkmobile.com/tradein, Back up & factory reset, Ship with prepaid label or bring to store, Credit applied in 2-3 billing cycles. Financing: 0% APR for 24 months on qualified credit.',
+    category: 'Devices',
+    tags: ['upgrade', 'trade-in', 'devices', 'financing'],
+    status: 'active',
+    updatedAt: '2024-11-15T11:15:00Z',
+  },
+  {
+    id: '7',
+    title: 'Troubleshooting - No Service',
+    content: 'Quick Fixes for No Service: 1) Toggle Airplane Mode on/off, 2) Restart device, 3) Check coverage at pinkmobile.com/coverage, 4) Remove and reinsert SIM card, 5) Check for carrier settings update. If issues persist: Reset network settings, Contact us for network outage info, Visit store for SIM replacement. Common causes: SIM damage, Account suspension, Device compatibility.',
+    category: 'Support',
+    tags: ['troubleshooting', 'no service', 'signal', 'help'],
+    status: 'active',
+    updatedAt: '2024-11-10T08:30:00Z',
+  },
+  {
+    id: '8',
+    title: 'Account Security & PIN',
+    content: 'Account PIN: 4-digit PIN required for account changes, Set during account creation, Required for SIM swaps, plan changes, adding lines. To Reset PIN: Online at pinkmobile.com/security, Call with last 4 SSN + billing zip, Store with valid photo ID. Two-Factor Authentication available via SMS or authenticator app. SIM swap protection enabled by default.',
+    category: 'Security',
+    tags: ['security', 'PIN', 'account', '2FA'],
+    status: 'active',
+    updatedAt: '2024-11-05T14:00:00Z',
+  },
+  {
+    id: '9',
+    title: 'International Roaming & Travel',
+    content: 'Global Pass $10/day: Use phone in 200+ countries, Unlimited talk & text, 5GB high-speed data per day, Only charged on days used. International Calling from US: Mexico/Canada included in Unlimited plans, Other countries $0.25-$3.00/min, International Calling Pack $15/month for discounts. Before travel: Verify destination coverage, Enable roaming in settings.',
+    category: 'International',
+    tags: ['international', 'roaming', 'travel', 'global'],
+    status: 'active',
+    updatedAt: '2024-10-28T10:00:00Z',
+  },
+  {
+    id: '10',
+    title: 'Customer Support Hours',
+    content: 'Phone Support 1-800-PINK-MOB: Mon-Fri 6AM-11PM EST, Sat-Sun 8AM-9PM EST. AI Assistant Sara available 24/7. Live Chat at pinkmobile.com/chat same hours, avg wait under 2 mins. Store locations at pinkmobile.com/stores, most open 10AM-8PM. Social: Twitter @PinkMobileHelp, Facebook /PinkMobile, response within 1 hour during business hours.',
+    category: 'Support',
+    tags: ['support', 'contact', 'hours', 'help'],
+    status: 'active',
+    updatedAt: '2024-10-20T09:00:00Z',
   },
 ];
 
-const categories = ['All', 'Products', 'Policies', 'Shipping', 'Company', 'FAQ'];
+const categories = ['All', 'Plans', 'Billing', 'Network', 'Devices', 'Support', 'Security', 'International'];
 
 export const KnowledgeBaseList: React.FC = () => {
   const [entries, setEntries] = useState<KnowledgeEntry[]>(mockEntries);
@@ -111,7 +158,89 @@ export const KnowledgeBaseList: React.FC = () => {
   const [editingEntry, setEditingEntry] = useState<KnowledgeEntry | null>(null);
   const [deletingEntry, setDeletingEntry] = useState<KnowledgeEntry | null>(null);
   const [selectedEntries, setSelectedEntries] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Handle PDF/Document Upload
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    const allowedTypes = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please upload a PDF, TXT, or Word document.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: 'File Too Large',
+        description: 'Maximum file size is 10MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    toast({
+      title: 'Processing Document',
+      description: `Extracting content from ${file.name}...`,
+    });
+
+    try {
+      // For now, create a placeholder entry from the file
+      // In production, this would call an API to extract text from PDF
+      const fileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+
+      // Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const newEntry: KnowledgeEntry = {
+        id: Date.now().toString(),
+        title: fileName,
+        content: `[Imported from ${file.name}]\n\nThis document has been uploaded and is ready for content extraction. In production, the text content would be automatically extracted from the PDF/document and stored here for Sara AI to reference during customer calls.\n\nFile size: ${(file.size / 1024).toFixed(1)} KB\nUploaded: ${new Date().toLocaleString()}`,
+        category: 'Support',
+        tags: ['imported', 'document', file.type.includes('pdf') ? 'pdf' : 'doc'],
+        status: 'active',
+        updatedAt: new Date().toISOString(),
+      };
+
+      setEntries([newEntry, ...entries]);
+
+      toast({
+        title: 'Document Imported',
+        description: `"${fileName}" has been added to the knowledge base.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Import Failed',
+        description: 'Failed to process the document. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Clear all entries
+  const handleClearAll = () => {
+    setEntries([]);
+    toast({
+      title: 'Knowledge Base Cleared',
+      description: 'All entries have been removed.',
+    });
+  };
 
   const filteredEntries = entries.filter((entry) => {
     const matchesSearch =
@@ -254,13 +383,44 @@ export const KnowledgeBaseList: React.FC = () => {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" className="gap-2">
-          <Upload className="h-4 w-4" />
-          Import
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".pdf,.txt,.doc,.docx"
+          className="hidden"
+        />
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <FileText className="h-4 w-4" />
+              Upload PDF
+            </>
+          )}
         </Button>
         <Button variant="outline" className="gap-2">
           <Download className="h-4 w-4" />
           Export
+        </Button>
+        <Button
+          variant="outline"
+          className="gap-2 text-destructive hover:text-destructive"
+          onClick={handleClearAll}
+          disabled={entries.length === 0}
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear All
         </Button>
       </div>
 

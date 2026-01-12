@@ -39,7 +39,7 @@ interface KnowledgeEntryFormProps {
   onSave: (entry: Partial<KnowledgeEntry>) => void;
 }
 
-const categories = ['Products', 'Policies', 'Shipping', 'Company', 'FAQ', 'Troubleshooting', 'Pricing'];
+const categories = ['Plans', 'Billing', 'Network', 'Devices', 'Support', 'Security', 'International', 'FAQ'];
 
 export const KnowledgeEntryForm: React.FC<KnowledgeEntryFormProps> = ({
   entry,
@@ -50,7 +50,7 @@ export const KnowledgeEntryForm: React.FC<KnowledgeEntryFormProps> = ({
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    category: 'Products',
+    category: 'Plans',
     tags: [] as string[],
     sourceUrl: '',
     status: 'active' as 'active' | 'inactive',
@@ -72,7 +72,7 @@ export const KnowledgeEntryForm: React.FC<KnowledgeEntryFormProps> = ({
       setFormData({
         title: '',
         content: '',
-        category: 'Products',
+        category: 'Plans',
         tags: [],
         sourceUrl: '',
         status: 'active',
@@ -135,7 +135,7 @@ export const KnowledgeEntryForm: React.FC<KnowledgeEntryFormProps> = ({
             <Label htmlFor="title">Title</Label>
             <Input
               id="title"
-              placeholder="e.g., Return Policy"
+              placeholder="e.g., Unlimited Plan Details"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             />

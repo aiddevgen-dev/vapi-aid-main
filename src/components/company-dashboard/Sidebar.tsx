@@ -75,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
         { id: 'dashboard' as SidebarSection, label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
         { id: 'campaigns' as SidebarSection, label: 'Campaigns', icon: <Megaphone className="h-4 w-4" /> },
         { id: 'ai-agents' as SidebarSection, label: 'AI Agents', icon: <Bot className="h-4 w-4" /> },
+        { id: 'human-agents' as SidebarSection, label: 'Human Agents', icon: <Headphones className="h-4 w-4" /> },
         { id: 'knowledge-base' as SidebarSection, label: 'Knowledge Base', icon: <BookOpen className="h-4 w-4" /> },
         { id: 'workflows' as SidebarSection, label: 'Workflows', icon: <GitBranch className="h-4 w-4" /> },
       ],
@@ -141,7 +142,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
       items: [
         { id: 'call-history' as SidebarSection, label: 'Call History', icon: <History className="h-4 w-4" /> },
         { id: 'leads' as SidebarSection, label: 'Leads', icon: <Target className="h-4 w-4" /> },
-        { id: 'human-agents' as SidebarSection, label: 'Human Agents', icon: <Users className="h-4 w-4" /> },
       ],
     },
     {

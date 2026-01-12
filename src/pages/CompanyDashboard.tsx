@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,6 +18,7 @@ import { Sidebar, SidebarSection } from '@/components/company-dashboard/Sidebar'
 import { DashboardOverview } from '@/components/company-dashboard/DashboardOverview';
 import { AIAgentsList } from '@/components/company-dashboard/ai-agents';
 import { KnowledgeBaseList } from '@/components/company-dashboard/knowledge-base';
+import { HumanAgentsList } from '@/components/company-dashboard/human-agents';
 import { WorkflowsList } from '@/components/company-dashboard/workflows';
 import {
   IntegrationsOverview,
@@ -160,6 +161,10 @@ export const CompanyDashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Track if initial fetch has been done to prevent redundant fetches
+  const initialFetchDone = useRef(false);
+  const previousUserId = useRef<string | null>(null);
+
   useEffect(() => {
     // Redirect if not company role
     if (userProfile && userProfile.role !== 'company') {
@@ -172,8 +177,17 @@ export const CompanyDashboard = () => {
       return;
     }
 
+    // Only fetch if:
+    // 1. We have a user
+    // 2. Either initial fetch hasn't been done OR user ID changed (different user logged in)
     if (user) {
-      fetchCompanyData();
+      const userChanged = previousUserId.current !== user.id;
+
+      if (!initialFetchDone.current || userChanged) {
+        previousUserId.current = user.id;
+        initialFetchDone.current = true;
+        fetchCompanyData();
+      }
     }
   }, [user, userProfile]);
 
@@ -994,9 +1008,10 @@ export const CompanyDashboard = () => {
         return <PipedriveIntegration onBack={() => setActiveSection('integrations')} />;
       case 'custom':
         return <CustomIntegration onBack={() => setActiveSection('integrations')} />;
+      case 'human-agents':
+        return <HumanAgentsList />;
       case 'call-history':
       case 'leads':
-      case 'human-agents':
         // These use the original tabs-based interface
         return renderOperationsContent();
       case 'settings':
@@ -1016,70 +1031,16 @@ export const CompanyDashboard = () => {
     }
   };
 
-  // Render the original Operations content (preserved exactly)
+  // Render the original Operations content (Call History and Leads)
   const renderOperationsContent = () => {
     // Determine which tab to show based on active section
-    const defaultTab = activeSection === 'call-history' ? 'calls'
-      : activeSection === 'leads' ? 'leads'
-      : 'agents';
+    const defaultTab = activeSection === 'call-history' ? 'calls' : 'leads';
 
     return (
       <div className="space-y-6">
-        {/* Stats Cards - Only show for human-agents */}
-        {activeSection === 'human-agents' && (
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{agents.length}</div>
-                <p className="text-xs text-muted-foreground">Active team members</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Online Agents</CardTitle>
-                <div className="h-2 w-2 bg-green-500 rounded-full" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {agents.filter((a) => a.status === 'online').length}
-                </div>
-                <p className="text-xs text-muted-foreground">Currently active</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
-                <Phone className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{callStats.totalCalls}</div>
-                <p className="text-xs text-muted-foreground">All time</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         {/* Main Content - Original Tabs */}
         <Tabs defaultValue={defaultTab} className="space-y-4">
           <TabsList>
-            {activeSection === 'human-agents' && (
-              <>
-                <TabsTrigger value="agents">My Agents</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
-                <TabsTrigger value="create">Create Agent</TabsTrigger>
-                {newlyCreatedAgents.length > 0 && (
-                  <TabsTrigger value="credentials">
-                    Credentials ({newlyCreatedAgents.length})
-                  </TabsTrigger>
-                )}
-              </>
-            )}
             {activeSection === 'call-history' && (
               <TabsTrigger value="calls">Call History</TabsTrigger>
             )}

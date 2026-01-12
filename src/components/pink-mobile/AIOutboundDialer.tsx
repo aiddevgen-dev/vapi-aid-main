@@ -26,9 +26,10 @@ interface PinkCustomer {
 
 interface AIOutboundDialerProps {
   agentId?: string;
+  onCallMade?: () => void;
 }
 
-export const AIOutboundDialer = ({ agentId: propAgentId }: AIOutboundDialerProps) => {
+export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboundDialerProps) => {
   const [customers, setCustomers] = useState<PinkCustomer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<PinkCustomer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,6 +165,8 @@ export const AIOutboundDialer = ({ agentId: propAgentId }: AIOutboundDialerProps
           title: "Call Initiated",
           description: `Sara AI is calling ${customerName || phoneNumber}${data.dbCallId ? ' (tracked)' : ''}`,
         });
+        // Trigger refresh of live calls panel
+        onCallMade?.();
       } else {
         throw new Error(data.error || 'Failed to initiate call');
       }

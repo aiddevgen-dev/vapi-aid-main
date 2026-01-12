@@ -41,9 +41,15 @@ export interface AITicket {
 
 export const PinkMobileDashboard = () => {
   const [selectedSession, setSelectedSession] = useState<AISession | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { userProfile, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Callback to trigger refresh when a call is made
+  const handleCallMade = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   const handleSignOut = async () => {
     try {
@@ -122,7 +128,7 @@ export const PinkMobileDashboard = () => {
         <div className="h-full grid grid-cols-12 gap-4">
           {/* Panel A: AI Outbound Dialer */}
           <div className="col-span-3 h-full overflow-hidden">
-            <AIOutboundDialer />
+            <AIOutboundDialer onCallMade={handleCallMade} />
           </div>
 
           {/* Panel B: Live Sessions */}
@@ -130,6 +136,7 @@ export const PinkMobileDashboard = () => {
             <LiveSessionsPanel
               onSelectSession={setSelectedSession}
               selectedSessionId={selectedSession?.id}
+              refreshKey={refreshKey}
             />
           </div>
 
