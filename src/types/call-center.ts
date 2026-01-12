@@ -26,6 +26,7 @@ export interface Call {
   resolution_status?: 'resolved' | 'unresolved' | 'escalated' | 'pending';
   first_response_time?: number;
   resolution_time?: number;
+  notes?: string;
 }
 
 export interface CustomerProfile {

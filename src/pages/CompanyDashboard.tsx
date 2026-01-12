@@ -90,6 +90,8 @@ interface RecentCall {
   call_direction: string;
   created_at: string;
   started_at: string | null;
+  resolution_status: string | null;
+  notes: string | null;
 }
 
 interface Transcript {
@@ -370,44 +372,68 @@ export const CompanyDashboard = () => {
 
   const fetchRecentCalls = async (companyId: string, limit: number = 20) => {
     try {
+      // First get all agent IDs for this company
+      const { data: companyAgents, error: agentsError } = await supabase
+        .from('agents')
+        .select('id, name')
+        .eq('company_id', companyId);
+
+      if (agentsError) {
+        console.error('Error fetching company agents:', agentsError);
+        throw agentsError;
+      }
+
+      const agentIds = companyAgents?.map(a => a.id) || [];
+      const agentNameMap = new Map(companyAgents?.map(a => [a.id, a.name]) || []);
+
+      console.log('Company agents:', companyAgents);
+      console.log('Agent IDs:', agentIds);
+
+      if (agentIds.length === 0) {
+        console.log('No agents found for company, skipping calls fetch');
+        setRecentCalls([]);
+        setHasMoreCalls(false);
+        return;
+      }
+
+      // Now fetch calls for these agents
       const { data: calls, error, count } = await supabase
         .from('calls')
-        .select(`
-          id,
-          customer_number,
-          call_status,
-          call_direction,
-          started_at,
-          ended_at,
-          created_at,
-          agents!inner(
-            name,
-            company_id
-          )
-        `, { count: 'exact' })
-        .eq('agents.company_id', companyId)
+        .select('*', { count: 'exact' })
+        .in('agent_id', agentIds)
         .order('created_at', { ascending: false })
         .limit(limit);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
 
-      const recentCallsData = calls?.map(call => {
-        const duration = call.ended_at && call.started_at
-          ? Math.round((new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000)
-          : 0;
+      console.log('fetchRecentCalls - raw calls:', calls);
+      console.log('fetchRecentCalls - count:', count);
+
+      const recentCallsData = (calls || []).map(call => {
+        // Use call_duration from DB if available, otherwise calculate
+        const duration = call.call_duration
+          || (call.ended_at && call.started_at
+            ? Math.round((new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000)
+            : 0);
 
         return {
           id: call.id,
-          customer_number: call.customer_number,
-          agent_name: call.agents.name,
+          customer_number: call.customer_number || 'Unknown',
+          agent_name: agentNameMap.get(call.agent_id) || 'Unknown',
           duration,
-          call_status: call.call_status,
+          call_status: call.call_status || 'unknown',
           call_direction: call.call_direction || 'inbound',
           created_at: call.created_at,
           started_at: call.started_at,
+          resolution_status: call.resolution_status,
+          notes: call.notes,
         };
-      }) || [];
+      });
 
+      console.log('fetchRecentCalls - mapped data:', recentCallsData);
       setRecentCalls(recentCallsData);
       setHasMoreCalls((count || 0) > limit);
     } catch (error) {
@@ -652,11 +678,296 @@ export const CompanyDashboard = () => {
     );
   }
 
+  // Render campaigns content - shows agents' calls with status
+  const renderCampaignsContent = () => {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Campaigns</h1>
+            <p className="text-muted-foreground">View your agents' call activities and performance</p>
+          </div>
+          <Badge variant="outline" className="text-sm">
+            {recentCalls.length} Total Calls
+          </Badge>
+        </div>
+
+        {/* Summary Stats */}
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Calls</p>
+                  <p className="text-3xl font-bold text-blue-600">{callStats.totalCalls}</p>
+                </div>
+                <Phone className="h-8 w-8 text-blue-600/50" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Calls Today</p>
+                  <p className="text-3xl font-bold text-green-600">{callStats.callsToday}</p>
+                </div>
+                <Calendar className="h-8 w-8 text-green-600/50" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-purple-500/5 to-purple-500/10 border-purple-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Avg Duration</p>
+                  <p className="text-3xl font-bold text-purple-600">{formatCallDuration(callStats.avgDuration)}</p>
+                </div>
+                <Clock className="h-8 w-8 text-purple-600/50" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-orange-500/5 to-orange-500/10 border-orange-500/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Success Rate</p>
+                  <p className="text-3xl font-bold text-orange-600">{callStats.successRate}%</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-orange-600/50" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Agent Performance Cards */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Agent Performance</h2>
+          {agentPerformance.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Agent Data</h3>
+                <p className="text-muted-foreground text-center">Agent performance data will appear once calls are made</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {agentPerformance.map((agent) => (
+                <Card key={agent.agent_id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                          agent.status === 'online' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <User className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">{agent.agent_name}</CardTitle>
+                          <div className="flex items-center gap-1.5">
+                            <div className={`h-2 w-2 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            <span className="text-xs text-muted-foreground capitalize">{agent.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg bg-green-500/5 border border-green-500/20 p-2 text-center">
+                        <PhoneIncoming className="h-4 w-4 text-green-600 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-green-600">{agent.inbound_calls}</p>
+                        <p className="text-xs text-muted-foreground">Inbound</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-2 text-center">
+                        <PhoneOutgoing className="h-4 w-4 text-blue-600 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-blue-600">{agent.outbound_calls}</p>
+                        <p className="text-xs text-muted-foreground">Outbound</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm pt-2 border-t">
+                      <span className="text-muted-foreground">Success Rate</span>
+                      <span className="font-medium">{agent.success_rate}%</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Avg Duration</span>
+                      <span className="font-medium">{formatCallDuration(agent.avg_duration)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Today's Calls</span>
+                      <Badge variant="secondary">{agent.calls_today}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Calls Table */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Recent Calls</h2>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>Direction</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Resolution</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentCalls.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        No calls yet. Calls will appear here once your agents start making or receiving calls.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    recentCalls.slice(0, 10).map((call) => (
+                      <React.Fragment key={call.id}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleCallExpand(call.id)}
+                        >
+                          <TableCell>
+                            {expandedCallId === call.id ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {call.call_direction === 'outbound' ? (
+                                <>
+                                  <PhoneOutgoing className="h-4 w-4 text-blue-500" />
+                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
+                                    Outbound
+                                  </Badge>
+                                </>
+                              ) : (
+                                <>
+                                  <PhoneIncoming className="h-4 w-4 text-green-500" />
+                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
+                                    Inbound
+                                  </Badge>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono">{call.customer_number}</TableCell>
+                          <TableCell>{call.agent_name}</TableCell>
+                          <TableCell>{formatCallDuration(call.duration)}</TableCell>
+                          <TableCell>
+                            <Badge variant={call.call_status === 'completed' ? 'default' : 'secondary'}>
+                              {call.call_status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {call.resolution_status ? (
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${
+                                  call.resolution_status === 'resolved'
+                                    ? 'bg-green-500/10 text-green-600 border-green-500/30'
+                                    : call.resolution_status === 'escalated'
+                                    ? 'bg-orange-500/10 text-orange-600 border-orange-500/30'
+                                    : 'bg-gray-500/10 text-gray-600 border-gray-500/30'
+                                }`}
+                              >
+                                {call.resolution_status}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{formatDateTime(call.created_at)}</TableCell>
+                        </TableRow>
+                        {expandedCallId === call.id && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="bg-muted/30 p-4">
+                              <div className="space-y-4">
+                                {call.notes && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                      <MessageSquare className="h-4 w-4" />
+                                      Call Summary
+                                    </div>
+                                    <div className="rounded-lg border bg-background p-3 max-h-48 overflow-y-auto">
+                                      <pre className="text-sm whitespace-pre-wrap font-sans">{call.notes}</pre>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-sm font-medium">
+                                    <MessageSquare className="h-4 w-4" />
+                                    Call Transcript
+                                  </div>
+                                  {loadingTranscript === call.id ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Loading transcript...
+                                    </div>
+                                  ) : callTranscripts[call.id]?.length > 0 ? (
+                                    <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border bg-background p-3">
+                                      {callTranscripts[call.id].map((t) => (
+                                        <div key={t.id} className={`flex gap-2 ${t.speaker === 'agent' ? 'justify-end' : ''}`}>
+                                          <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                                            t.speaker === 'agent'
+                                              ? 'bg-primary text-primary-foreground'
+                                              : 'bg-muted'
+                                          }`}>
+                                            <div className="text-xs opacity-70 mb-1">
+                                              {t.speaker === 'agent' ? 'Agent' : 'Customer'}
+                                            </div>
+                                            {t.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No transcript available for this call.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              {recentCalls.length > 10 && (
+                <div className="flex justify-center py-4 border-t">
+                  <Button variant="outline" onClick={() => setActiveSection('call-history')}>
+                    View All Calls
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
   // Render the appropriate section content
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
         return <DashboardOverview onNavigate={handleNavigate} />;
+      case 'campaigns':
+        return renderCampaignsContent();
       case 'ai-agents':
         return <AIAgentsList />;
       case 'knowledge-base':
@@ -1090,7 +1401,7 @@ export const CompanyDashboard = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Call History</CardTitle>
-                <CardDescription>View all calls handled by your team with transcripts</CardDescription>
+                <CardDescription>View all calls handled by your team with transcripts and outcomes</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Table>
@@ -1102,13 +1413,14 @@ export const CompanyDashboard = () => {
                       <TableHead>Agent</TableHead>
                       <TableHead>Duration</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Resolution</TableHead>
                       <TableHead>Date & Time</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {recentCalls.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground">
                           No calls yet.
                         </TableCell>
                       </TableRow>
@@ -1153,41 +1465,75 @@ export const CompanyDashboard = () => {
                                 {call.call_status}
                               </Badge>
                             </TableCell>
+                            <TableCell>
+                              {call.resolution_status ? (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    call.resolution_status === 'resolved'
+                                      ? 'bg-green-500/10 text-green-600 border-green-500/30'
+                                      : call.resolution_status === 'escalated'
+                                      ? 'bg-orange-500/10 text-orange-600 border-orange-500/30'
+                                      : 'bg-gray-500/10 text-gray-600 border-gray-500/30'
+                                  }`}
+                                >
+                                  {call.resolution_status}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">-</span>
+                              )}
+                            </TableCell>
                             <TableCell>{formatDateTime(call.created_at)}</TableCell>
                           </TableRow>
                           {expandedCallId === call.id && (
                             <TableRow>
-                              <TableCell colSpan={7} className="bg-muted/30 p-4">
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-sm font-medium">
-                                    <MessageSquare className="h-4 w-4" />
-                                    Call Transcript
-                                  </div>
-                                  {loadingTranscript === call.id ? (
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                      Loading transcript...
+                              <TableCell colSpan={8} className="bg-muted/30 p-4">
+                                <div className="space-y-4">
+                                  {/* Call Summary from Notes */}
+                                  {call.notes && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2 text-sm font-medium">
+                                        <MessageSquare className="h-4 w-4" />
+                                        Call Summary
+                                      </div>
+                                      <div className="rounded-lg border bg-background p-3 max-h-48 overflow-y-auto">
+                                        <pre className="text-sm whitespace-pre-wrap font-sans">{call.notes}</pre>
+                                      </div>
                                     </div>
-                                  ) : callTranscripts[call.id]?.length > 0 ? (
-                                    <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border bg-background p-3">
-                                      {callTranscripts[call.id].map((t) => (
-                                        <div key={t.id} className={`flex gap-2 ${t.speaker === 'agent' ? 'justify-end' : ''}`}>
-                                          <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                                            t.speaker === 'agent'
-                                              ? 'bg-primary text-primary-foreground'
-                                              : 'bg-muted'
-                                          }`}>
-                                            <div className="text-xs opacity-70 mb-1">
-                                              {t.speaker === 'agent' ? 'Agent' : 'Customer'}
-                                            </div>
-                                            {t.text}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">No transcript available for this call.</p>
                                   )}
+
+                                  {/* Live Transcript */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                      <MessageSquare className="h-4 w-4" />
+                                      Call Transcript
+                                    </div>
+                                    {loadingTranscript === call.id ? (
+                                      <div className="flex items-center gap-2 text-muted-foreground">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Loading transcript...
+                                      </div>
+                                    ) : callTranscripts[call.id]?.length > 0 ? (
+                                      <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border bg-background p-3">
+                                        {callTranscripts[call.id].map((t) => (
+                                          <div key={t.id} className={`flex gap-2 ${t.speaker === 'agent' ? 'justify-end' : ''}`}>
+                                            <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                                              t.speaker === 'agent'
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'bg-muted'
+                                            }`}>
+                                              <div className="text-xs opacity-70 mb-1">
+                                                {t.speaker === 'agent' ? 'Agent' : 'Customer'}
+                                              </div>
+                                              {t.text}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No transcript available for this call.</p>
+                                    )}
+                                  </div>
                                 </div>
                               </TableCell>
                             </TableRow>

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { LiveSessionsPanel } from '@/components/pink-mobile/LiveSessionsPanel';
 import { TicketDetailPanel } from '@/components/pink-mobile/TicketDetailPanel';
 import { AIAnalyticsPanel } from '@/components/pink-mobile/AIAnalyticsPanel';
+import { AIOutboundDialer } from '@/components/pink-mobile/AIOutboundDialer';
 
 export interface AISession {
   id: string;
@@ -116,10 +117,15 @@ export const PinkMobileDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content - 3 Panels */}
+      {/* Main Content - 4 Panels */}
       <div className="flex-1 min-h-0 p-4">
         <div className="h-full grid grid-cols-12 gap-4">
-          {/* Panel A: Live Sessions */}
+          {/* Panel A: AI Outbound Dialer */}
+          <div className="col-span-3 h-full overflow-hidden">
+            <AIOutboundDialer />
+          </div>
+
+          {/* Panel B: Live Sessions */}
           <div className="col-span-3 h-full overflow-hidden">
             <LiveSessionsPanel
               onSelectSession={setSelectedSession}
@@ -127,13 +133,13 @@ export const PinkMobileDashboard = () => {
             />
           </div>
 
-          {/* Panel B: Ticket Detail */}
-          <div className="col-span-5 h-full overflow-hidden">
+          {/* Panel C: Ticket Detail */}
+          <div className="col-span-3 h-full overflow-hidden">
             <TicketDetailPanel selectedSession={selectedSession} />
           </div>
 
-          {/* Panel C: Analytics */}
-          <div className="col-span-4 h-full overflow-hidden">
+          {/* Panel D: Analytics */}
+          <div className="col-span-3 h-full overflow-hidden">
             <AIAnalyticsPanel />
           </div>
         </div>

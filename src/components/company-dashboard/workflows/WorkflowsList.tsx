@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Plus,
   Search,
   MoreVertical,
@@ -35,9 +44,14 @@ import {
   MessageSquare,
   Clock,
   Zap,
+  Play,
+  Activity,
+  Loader2,
 } from 'lucide-react';
 import { WorkflowForm, Workflow } from './WorkflowForm';
+import { CampaignExecutionPanel } from './WorkflowExecutionPanel';
 import { useToast } from '@/hooks/use-toast';
+import { temporalService } from '@/services/temporalService';
 
 // Mock data
 const mockWorkflows: Workflow[] = [
@@ -123,12 +137,37 @@ const getTriggerLabel = (type: string) => {
   }
 };
 
+// Campaign configuration for running workflows
+interface CampaignConfig {
+  campaignId: string;
+  companyId: string;
+  batchSize: number;
+  callWindowStart: string;
+  callWindowEnd: string;
+  maxConcurrentCalls: number;
+}
+
 export const WorkflowsList: React.FC = () => {
   const [workflows, setWorkflows] = useState<Workflow[]>(mockWorkflows);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [deletingWorkflow, setDeletingWorkflow] = useState<Workflow | null>(null);
+
+  // Temporal integration state
+  const [runningWorkflow, setRunningWorkflow] = useState<Workflow | null>(null);
+  const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+  const [campaignConfig, setCampaignConfig] = useState<CampaignConfig>({
+    campaignId: '',
+    companyId: 'demo-company',
+    batchSize: 10,
+    callWindowStart: '09:00',
+    callWindowEnd: '17:00',
+    maxConcurrentCalls: 3,
+  });
+
   const { toast } = useToast();
 
   const filteredWorkflows = workflows.filter((workflow) =>
@@ -219,6 +258,60 @@ export const WorkflowsList: React.FC = () => {
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  // Temporal workflow handlers
+  const handleRunWorkflow = (workflow: Workflow) => {
+    setRunningWorkflow(workflow);
+    setCampaignConfig({
+      ...campaignConfig,
+      campaignId: `campaign-${workflow.id}-${Date.now()}`,
+    });
+    setIsRunDialogOpen(true);
+  };
+
+  const handleStartWorkflow = async () => {
+    if (!runningWorkflow) return;
+
+    setIsStarting(true);
+    try {
+      // Determine workflow type based on trigger
+      if (runningWorkflow.triggerType === 'outbound-call') {
+        // Start lead processing workflow
+        const result = await temporalService.startLeadProcessingWorkflow({
+          campaignId: campaignConfig.campaignId,
+          companyId: campaignConfig.companyId,
+          batchSize: campaignConfig.batchSize,
+          callWindowStart: campaignConfig.callWindowStart,
+          callWindowEnd: campaignConfig.callWindowEnd,
+          maxConcurrentCalls: campaignConfig.maxConcurrentCalls,
+          aiAgentId: runningWorkflow.aiAgentId || '',
+        });
+
+        setActiveWorkflowId(result.workflowId);
+        toast({
+          title: 'Campaign Started',
+          description: `${runningWorkflow.name} is now running. Workflow ID: ${result.workflowId.slice(0, 12)}...`,
+        });
+      } else {
+        // For other trigger types, show a message (they would be triggered by events)
+        toast({
+          title: 'Workflow Activated',
+          description: `${runningWorkflow.name} is now listening for ${getTriggerLabel(runningWorkflow.triggerType)} events.`,
+        });
+      }
+
+      setIsRunDialogOpen(false);
+      setRunningWorkflow(null);
+    } catch (error) {
+      toast({
+        title: 'Failed to Start Workflow',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   const activeCount = workflows.filter((w) => w.status === 'active').length;
@@ -344,7 +437,7 @@ export const WorkflowsList: React.FC = () => {
                   <span>{workflow.endOfCallActions.length} end actions</span>
                 </div>
 
-                {/* Status Toggle & Date */}
+                {/* Status Toggle & Run Button */}
                 <div className="flex items-center justify-between pt-3 border-t">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -355,9 +448,22 @@ export const WorkflowsList: React.FC = () => {
                       {workflow.status === 'active' ? 'Active' : 'Inactive'}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    Updated {formatDate(workflow.updatedAt)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(workflow.updatedAt)}
+                    </span>
+                    {workflow.status === 'active' && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleRunWorkflow(workflow)}
+                        className="gap-1 h-7"
+                      >
+                        <Play className="h-3 w-3" />
+                        Run
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -393,6 +499,145 @@ export const WorkflowsList: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Run Workflow Dialog */}
+      <Dialog open={isRunDialogOpen} onOpenChange={setIsRunDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              Run Workflow
+            </DialogTitle>
+            <DialogDescription>
+              Configure and start "{runningWorkflow?.name}"
+            </DialogDescription>
+          </DialogHeader>
+
+          {runningWorkflow?.triggerType === 'outbound-call' ? (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="batchSize">Batch Size</Label>
+                  <Input
+                    id="batchSize"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={campaignConfig.batchSize}
+                    onChange={(e) => setCampaignConfig({
+                      ...campaignConfig,
+                      batchSize: parseInt(e.target.value) || 10,
+                    })}
+                  />
+                  <p className="text-xs text-muted-foreground">Leads to process per batch</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxConcurrent">Concurrent Calls</Label>
+                  <Input
+                    id="maxConcurrent"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={campaignConfig.maxConcurrentCalls}
+                    onChange={(e) => setCampaignConfig({
+                      ...campaignConfig,
+                      maxConcurrentCalls: parseInt(e.target.value) || 3,
+                    })}
+                  />
+                  <p className="text-xs text-muted-foreground">Max simultaneous calls</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="windowStart">Call Window Start</Label>
+                  <Input
+                    id="windowStart"
+                    type="time"
+                    value={campaignConfig.callWindowStart}
+                    onChange={(e) => setCampaignConfig({
+                      ...campaignConfig,
+                      callWindowStart: e.target.value,
+                    })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="windowEnd">Call Window End</Label>
+                  <Input
+                    id="windowEnd"
+                    type="time"
+                    value={campaignConfig.callWindowEnd}
+                    onChange={(e) => setCampaignConfig({
+                      ...campaignConfig,
+                      callWindowEnd: e.target.value,
+                    })}
+                  />
+                </div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-sm">
+                <p className="font-medium mb-1">Workflow will:</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                  <li>Fetch leads from database</li>
+                  <li>Initiate outbound calls using AI agent</li>
+                  <li>Track call outcomes and update lead status</li>
+                  <li>Execute {runningWorkflow?.endOfCallActions.length || 0} end-of-call actions</li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="py-4">
+              <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium text-blue-700">Event-Triggered Workflow</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This workflow will activate and wait for {getTriggerLabel(runningWorkflow?.triggerType || '')} events.
+                  Each incoming event will trigger the workflow automatically.
+                </p>
+              </div>
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm">
+                <p className="font-medium mb-1">On trigger, workflow will:</p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                  <li>Handle call with AI agent</li>
+                  <li>Use {runningWorkflow?.tools.length || 0} configured tools</li>
+                  <li>Detect intent and escalate if needed</li>
+                  <li>Execute {runningWorkflow?.endOfCallActions.length || 0} end-of-call actions</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRunDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleStartWorkflow} disabled={isStarting} className="gap-2">
+              {isStarting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Start Workflow
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Active Campaign Panel */}
+      {activeWorkflowId && (
+        <div className="fixed bottom-4 right-4 w-96 z-50 shadow-lg">
+          <CampaignExecutionPanel
+            workflowId={activeWorkflowId}
+            campaignName="Outbound Campaign"
+            onClose={() => setActiveWorkflowId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };

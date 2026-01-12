@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,14 @@ import {
   Code2,
   Target,
   Plus,
+  RefreshCw,
+  Play,
+  Loader2,
+  Activity,
 } from 'lucide-react';
+import { temporalService } from '@/services/temporalService';
+import { IntegrationSyncPanel } from '@/components/company-dashboard/workflows/WorkflowExecutionPanel';
+import { useToast } from '@/hooks/use-toast';
 
 interface IntegrationsOverviewProps {
   onNavigate: (section: string) => void;
@@ -205,12 +212,61 @@ const IntegrationCard: React.FC<{ integration: Integration; onNavigate: (id: str
 );
 
 export const IntegrationsOverview: React.FC<IntegrationsOverviewProps> = ({ onNavigate }) => {
+  const [activeSyncWorkflowId, setActiveSyncWorkflowId] = useState<string | null>(null);
+  const [isStartingSync, setIsStartingSync] = useState(false);
+  const { toast } = useToast();
+
   const channels = integrations.filter((i) => i.category === 'channel');
   const crms = integrations.filter((i) => i.category === 'crm');
   const helpdesk = integrations.filter((i) => i.category === 'helpdesk');
   const custom = integrations.filter((i) => i.category === 'custom');
 
   const connectedCount = integrations.filter((i) => i.status === 'connected').length;
+  const connectedIntegrations = integrations.filter((i) => i.status === 'connected');
+
+  const handleStartSync = async () => {
+    setIsStartingSync(true);
+    try {
+      // Build integration configs from connected integrations
+      const integrationConfigs = connectedIntegrations
+        .filter(i => ['salesforce', 'hubspot', 'zendesk', 'zoho', 'pipedrive'].includes(i.id))
+        .map(i => ({
+          type: i.id as 'salesforce' | 'hubspot' | 'zendesk' | 'zoho' | 'pipedrive',
+          credentials: {}, // Would come from actual config
+          syncDirection: 'bidirectional' as const,
+          syncEntities: ['contacts', 'leads', 'calls'],
+        }));
+
+      if (integrationConfigs.length === 0) {
+        toast({
+          title: 'No Syncable Integrations',
+          description: 'Connect at least one CRM or Helpdesk integration to start syncing.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const result = await temporalService.startIntegrationSyncWorkflow({
+        companyId: 'demo-company',
+        integrations: integrationConfigs,
+        syncIntervalMinutes: 15,
+      });
+
+      setActiveSyncWorkflowId(result.workflowId);
+      toast({
+        title: 'Sync Workflow Started',
+        description: `Syncing ${integrationConfigs.length} integrations. Workflow ID: ${result.workflowId.slice(0, 12)}...`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Start Sync',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsStartingSync(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -225,6 +281,28 @@ export const IntegrationsOverview: React.FC<IntegrationsOverviewProps> = ({ onNa
             <Zap className="h-3 w-3" />
             {connectedCount} of {integrations.length} Connected
           </Badge>
+          <Button
+            onClick={handleStartSync}
+            disabled={isStartingSync || connectedCount === 0}
+            className="gap-2"
+          >
+            {isStartingSync ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : activeSyncWorkflowId ? (
+              <>
+                <Activity className="h-4 w-4" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                Start Sync
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
@@ -318,6 +396,17 @@ export const IntegrationsOverview: React.FC<IntegrationsOverviewProps> = ({ onNa
           </div>
         </CardContent>
       </Card>
+
+      {/* Active Sync Panel */}
+      {activeSyncWorkflowId && (
+        <div className="fixed bottom-4 right-4 w-96 z-50 shadow-lg">
+          <IntegrationSyncPanel
+            workflowId={activeSyncWorkflowId}
+            companyName="Demo Company"
+            onClose={() => setActiveSyncWorkflowId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };

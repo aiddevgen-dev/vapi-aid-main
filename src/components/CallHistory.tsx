@@ -306,17 +306,32 @@ export const CallHistory = ({ onSelectCall, className }: CallHistoryProps) => {
                               <Calendar className="h-3 w-3" />
                               {formatDate(call.started_at)}
                             </div>
-                            
+
                             {call.call_duration && (
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {formatDuration(call.call_duration)}
                               </div>
                             )}
-                            
+
                             <div className="text-xs text-gray-400">
                               {call.call_direction?.toUpperCase()}
                             </div>
+
+                            {call.resolution_status && (
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${
+                                  call.resolution_status === 'resolved'
+                                    ? 'bg-green-500/10 text-green-600 border-green-500/30'
+                                    : call.resolution_status === 'escalated'
+                                    ? 'bg-orange-500/10 text-orange-600 border-orange-500/30'
+                                    : 'bg-gray-500/10 text-gray-600 border-gray-500/30'
+                                }`}
+                              >
+                                {call.resolution_status}
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>

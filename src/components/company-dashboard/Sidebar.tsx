@@ -21,10 +21,12 @@ import {
   ChevronRight,
   Zap,
   Code2,
+  Megaphone,
 } from 'lucide-react';
 
 export type SidebarSection =
   | 'dashboard'
+  | 'campaigns'
   | 'ai-agents'
   | 'knowledge-base'
   | 'workflows'
@@ -71,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
       label: 'MAIN',
       items: [
         { id: 'dashboard' as SidebarSection, label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
+        { id: 'campaigns' as SidebarSection, label: 'Campaigns', icon: <Megaphone className="h-4 w-4" /> },
         { id: 'ai-agents' as SidebarSection, label: 'AI Agents', icon: <Bot className="h-4 w-4" /> },
         { id: 'knowledge-base' as SidebarSection, label: 'Knowledge Base', icon: <BookOpen className="h-4 w-4" /> },
         { id: 'workflows' as SidebarSection, label: 'Workflows', icon: <GitBranch className="h-4 w-4" /> },
