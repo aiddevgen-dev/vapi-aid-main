@@ -172,6 +172,27 @@ export const PinkMobileDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(5);
 
+      // Check if current activeCall is still active in DB
+      if (activeCall) {
+        const stillActive = allCalls?.find(c => c.id === activeCall.id && c.call_status === 'in-progress');
+        if (!stillActive) {
+          console.log('[PinkMobile] Active call no longer in-progress, clearing state');
+          setActiveCall(null);
+          setIncomingCall(null);
+          return;
+        }
+      }
+
+      // Check if current incomingCall is still ringing in DB
+      if (incomingCall) {
+        const stillRinging = allCalls?.find(c => c.id === incomingCall.id && c.call_status === 'ringing');
+        if (!stillRinging) {
+          console.log('[PinkMobile] Incoming call no longer ringing, clearing state');
+          setIncomingCall(null);
+          return;
+        }
+      }
+
       if (allCalls && allCalls.length > 0) {
         // Check for active call
         const activeCallInDb = allCalls.find(c =>
@@ -195,6 +216,13 @@ export const PinkMobileDashboard = () => {
               setIncomingCall(ringingCallInDb as Call);
             }
           }
+        }
+      } else {
+        // No active or ringing calls in DB, clear state
+        if (activeCall || incomingCall) {
+          console.log('[PinkMobile] No active calls in DB, clearing state');
+          setActiveCall(null);
+          setIncomingCall(null);
         }
       }
     }, 5000);
@@ -351,14 +379,14 @@ export const PinkMobileDashboard = () => {
 
       {/* Main Content - 5 Panels */}
       <div className="flex-1 min-h-0 p-4">
-        <div className="h-full grid grid-cols-12 gap-4">
+        <div className="h-full grid grid-cols-12 gap-3">
           {/* Panel A: AI Outbound Dialer */}
           <div className="col-span-2 h-full overflow-hidden">
             <AIOutboundDialer onCallMade={handleCallMade} />
           </div>
 
           {/* Panel B: Live Sessions */}
-          <div className="col-span-2 h-full overflow-hidden">
+          <div className="col-span-3 h-full overflow-hidden">
             <LiveSessionsPanel
               onSelectSession={setSelectedSession}
               selectedSessionId={selectedSession?.id}
@@ -367,7 +395,7 @@ export const PinkMobileDashboard = () => {
           </div>
 
           {/* Panel C: Ticket Detail */}
-          <div className="col-span-2 h-full overflow-hidden">
+          <div className="col-span-3 h-full overflow-hidden">
             <TicketDetailPanel selectedSession={selectedSession} />
           </div>
 
@@ -376,8 +404,8 @@ export const PinkMobileDashboard = () => {
             <AIAnalyticsPanel />
           </div>
 
-          {/* Panel E: Human Agent Call Panel - Handles incoming calls with transcript & AI suggestions */}
-          <div className="col-span-4 h-full overflow-hidden">
+          {/* Panel E: Human Agent Call Panel - Compact box for incoming calls */}
+          <div className="col-span-2 h-full overflow-hidden">
             <HumanAgentCallPanel
               twilioCall={twilioCall}
               isConnected={isConnected}

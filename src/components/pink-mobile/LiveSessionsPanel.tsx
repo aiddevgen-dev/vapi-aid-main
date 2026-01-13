@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Phone, PhoneIncoming, PhoneOutgoing, CheckCircle, Loader2, Clock, ChevronDown } from 'lucide-react';
+import { Phone, PhoneIncoming, PhoneOutgoing, CheckCircle, Loader2, Clock, ChevronDown, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AISession } from '@/pages/PinkMobileDashboard';
+import { TranscriptViewerDialog } from './TranscriptViewerDialog';
 
 interface LiveSessionsPanelProps {
   onSelectSession: (session: AISession) => void;
@@ -33,6 +34,13 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [transcriptDialogOpen, setTranscriptDialogOpen] = useState(false);
+  const [selectedCallForTranscript, setSelectedCallForTranscript] = useState<CallRecord | null>(null);
+
+  const handleViewTranscript = (call: CallRecord) => {
+    setSelectedCallForTranscript(call);
+    setTranscriptDialogOpen(true);
+  };
 
   const fetchCalls = useCallback(async (loadMore = false) => {
     try {
@@ -318,11 +326,20 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                       <CheckCircle className="h-3 w-3 text-green-500" />
-                      <span>Completed by AI</span>
+                      <span>Completed</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatTime(call.started_at)}
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] text-primary hover:bg-primary/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewTranscript(call);
+                      }}
+                    >
+                      <FileText className="h-3 w-3 mr-1" />
+                      Transcript
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -353,6 +370,21 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
           )}
         </ScrollArea>
       </CardContent>
+
+      {/* Transcript Viewer Dialog */}
+      <TranscriptViewerDialog
+        isOpen={transcriptDialogOpen}
+        onClose={() => {
+          setTranscriptDialogOpen(false);
+          setSelectedCallForTranscript(null);
+        }}
+        callId={selectedCallForTranscript?.id || null}
+        customerNumber={selectedCallForTranscript?.customer_number}
+        callDirection={selectedCallForTranscript?.call_direction}
+        callStatus={selectedCallForTranscript?.call_status}
+        startedAt={selectedCallForTranscript?.started_at}
+        endedAt={selectedCallForTranscript?.ended_at}
+      />
     </Card>
   );
 };
