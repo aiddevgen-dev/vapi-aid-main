@@ -10,7 +10,7 @@ VAPI Aid is an advanced AI-powered call center solution that provides real-time 
 - **Call Analytics**: Detailed call metrics and performance insights
 - **Multi-channel Support**: Voice calls with integrated chat capabilities
 - **Agent Dashboard**: Unified interface for managing customer interactions
-
+sssss
 ## Technology Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS
