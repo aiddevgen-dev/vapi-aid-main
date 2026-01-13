@@ -143,11 +143,12 @@ export const PinkMobileDashboard = () => {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // Check for existing active calls
+      // Check for existing active calls (only inbound/transferred calls, not outbound AI calls)
       const { data: activeCalls } = await supabase
         .from('calls')
         .select('*')
         .eq('call_status', 'in-progress')
+        .eq('call_direction', 'inbound')
         .eq('agent_id', currentAgentId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -196,9 +197,11 @@ export const PinkMobileDashboard = () => {
       }
 
       if (allCalls && allCalls.length > 0) {
-        // Check for active call
+        // Check for active call (only inbound/transferred calls, not outbound AI calls)
         const activeCallInDb = allCalls.find(c =>
-          c.agent_id === currentAgentId && c.call_status === 'in-progress'
+          c.agent_id === currentAgentId &&
+          c.call_status === 'in-progress' &&
+          c.call_direction === 'inbound'
         );
         if (activeCallInDb && !activeCall) {
           setActiveCall(activeCallInDb as Call);
@@ -275,7 +278,8 @@ export const PinkMobileDashboard = () => {
         if (incomingCall && updatedCall.id === incomingCall.id) {
           if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
             setIncomingCall(null);
-          } else if (updatedCall.call_status === 'in-progress') {
+          } else if (updatedCall.call_status === 'in-progress' && updatedCall.call_direction === 'inbound') {
+            // Only set as active call if it's an inbound call (transferred from AI)
             setIncomingCall(null);
             setActiveCall(updatedCall);
           }
