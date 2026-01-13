@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, LogOut, User, Headphones } from 'lucide-react';
@@ -9,6 +9,10 @@ import { LiveSessionsPanel } from '@/components/pink-mobile/LiveSessionsPanel';
 import { TicketDetailPanel } from '@/components/pink-mobile/TicketDetailPanel';
 import { AIAnalyticsPanel } from '@/components/pink-mobile/AIAnalyticsPanel';
 import { AIOutboundDialer } from '@/components/pink-mobile/AIOutboundDialer';
+import { HumanAgentCallPanel } from '@/components/pink-mobile/HumanAgentCallPanel';
+import { useTwilioVoice } from '@/hooks/useTwilioVoice';
+import { supabase } from '@/integrations/supabase/client';
+import { Call } from '@/types/call-center';
 
 export interface AISession {
   id: string;
@@ -42,13 +46,235 @@ export interface AITicket {
 export const PinkMobileDashboard = () => {
   const [selectedSession, setSelectedSession] = useState<AISession | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<Call | null>(null);
   const { userProfile, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Initialize Twilio Voice
+  const {
+    activeCall: twilioCall,
+    isConnected,
+    isMuted,
+    isOnHold,
+    isDeviceReady,
+    isInitializing,
+    answerCall: twilioAnswerCall,
+    rejectCall: twilioRejectCall,
+    hangupCall: twilioHangupCall,
+    toggleMute,
+    toggleHold,
+    retryConnection,
+  } = useTwilioVoice(() => {
+    // Callback for when Twilio call disconnects
+    console.log('[PinkMobile] Twilio call disconnected - clearing state');
+    setActiveCall(null);
+    setIncomingCall(null);
+  });
+
+  // Get current agent ID helper
+  const getCurrentAgentId = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data: agent } = await supabase
+        .from('agents')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      return agent?.id || null;
+    } catch (error) {
+      console.error('[PinkMobile] Error getting agent ID:', error);
+      return null;
+    }
+  };
+
+  // Set agent online/offline status
+  useEffect(() => {
+    let agentId: string | null = null;
+
+    const setAgentOnline = async () => {
+      agentId = await getCurrentAgentId();
+      if (!agentId) return;
+
+      console.log('[PinkMobile] Setting agent status to online:', agentId);
+      await supabase
+        .from('agents')
+        .update({ status: 'online', updated_at: new Date().toISOString() })
+        .eq('id', agentId);
+    };
+
+    const setAgentOffline = async () => {
+      if (!agentId) return;
+      console.log('[PinkMobile] Setting agent status to offline:', agentId);
+      await supabase
+        .from('agents')
+        .update({ status: 'offline', updated_at: new Date().toISOString() })
+        .eq('id', agentId);
+    };
+
+    setAgentOnline();
+    return () => { setAgentOffline(); };
+  }, []);
+
+  // Subscribe to incoming calls and call updates
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeCallState = async () => {
+      if (!mounted) return;
+
+      const currentAgentId = await getCurrentAgentId();
+      console.log('[PinkMobile] Initializing call state for agent:', currentAgentId);
+
+      // Check for existing ringing calls
+      const { data: ringingCalls } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('call_direction', 'inbound')
+        .eq('call_status', 'ringing')
+        .or(`agent_id.eq.${currentAgentId},agent_id.is.null`)
+        .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // Check for existing active calls
+      const { data: activeCalls } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('call_status', 'in-progress')
+        .eq('agent_id', currentAgentId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!mounted) return;
+
+      if (activeCalls && activeCalls.length > 0) {
+        setActiveCall(activeCalls[0] as Call);
+        setIncomingCall(null);
+      } else if (ringingCalls && ringingCalls.length > 0) {
+        setIncomingCall(ringingCalls[0] as Call);
+      }
+    };
+
+    initializeCallState();
+
+    // Auto-sync every 5 seconds
+    const syncInterval = setInterval(async () => {
+      const currentAgentId = await getCurrentAgentId();
+      const { data: allCalls } = await supabase
+        .from('calls')
+        .select('*')
+        .or('call_status.eq.ringing,call_status.eq.in-progress')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (allCalls && allCalls.length > 0) {
+        // Check for active call
+        const activeCallInDb = allCalls.find(c =>
+          c.agent_id === currentAgentId && c.call_status === 'in-progress'
+        );
+        if (activeCallInDb && !activeCall) {
+          setActiveCall(activeCallInDb as Call);
+          setIncomingCall(null);
+        }
+
+        // Check for ringing calls
+        if (!activeCall) {
+          const ringingCallInDb = allCalls.find(c =>
+            (c.agent_id === currentAgentId || !c.agent_id) &&
+            c.call_status === 'ringing' &&
+            c.call_direction === 'inbound'
+          );
+          if (ringingCallInDb && !incomingCall) {
+            const callAge = Date.now() - new Date(ringingCallInDb.created_at).getTime();
+            if (callAge < 15 * 60 * 1000) {
+              setIncomingCall(ringingCallInDb as Call);
+            }
+          }
+        }
+      }
+    }, 5000);
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('pink-mobile-calls')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'calls',
+      }, async (payload) => {
+        if (!mounted) return;
+        const newCall = payload.new as Call;
+        const currentAgentId = await getCurrentAgentId();
+
+        const callAge = Date.now() - new Date(newCall.created_at).getTime();
+        const isRecentCall = callAge < 15 * 60 * 1000;
+
+        if (newCall.call_direction === 'inbound' &&
+            newCall.call_status === 'ringing' &&
+            (!newCall.agent_id || newCall.agent_id === currentAgentId) &&
+            !activeCall &&
+            isRecentCall) {
+          setIncomingCall(newCall);
+          toast({
+            title: "Incoming Call",
+            description: `Call from ${newCall.customer_number}`,
+          });
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'calls',
+      }, async (payload) => {
+        if (!mounted) return;
+        const updatedCall = payload.new as Call;
+
+        if (activeCall && updatedCall.id === activeCall.id) {
+          setActiveCall(updatedCall);
+          if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+            setActiveCall(null);
+            setIncomingCall(null);
+          }
+        }
+
+        if (incomingCall && updatedCall.id === incomingCall.id) {
+          if (updatedCall.call_status === 'completed' || updatedCall.call_status === 'failed') {
+            setIncomingCall(null);
+          } else if (updatedCall.call_status === 'in-progress') {
+            setIncomingCall(null);
+            setActiveCall(updatedCall);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      clearInterval(syncInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [activeCall, incomingCall, toast]);
+
   // Callback to trigger refresh when a call is made
   const handleCallMade = () => {
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleCallAnswered = (call: Call) => {
+    console.log('[PinkMobile] Call answered:', call.id);
+    setActiveCall(call);
+    setIncomingCall(null);
+  };
+
+  const handleCallEnded = () => {
+    console.log('[PinkMobile] Call ended');
+    setActiveCall(null);
+    setIncomingCall(null);
   };
 
   const handleSignOut = async () => {
@@ -123,16 +349,16 @@ export const PinkMobileDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content - 4 Panels */}
+      {/* Main Content - 5 Panels */}
       <div className="flex-1 min-h-0 p-4">
         <div className="h-full grid grid-cols-12 gap-4">
           {/* Panel A: AI Outbound Dialer */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-2 h-full overflow-hidden">
             <AIOutboundDialer onCallMade={handleCallMade} />
           </div>
 
           {/* Panel B: Live Sessions */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-2 h-full overflow-hidden">
             <LiveSessionsPanel
               onSelectSession={setSelectedSession}
               selectedSessionId={selectedSession?.id}
@@ -141,13 +367,35 @@ export const PinkMobileDashboard = () => {
           </div>
 
           {/* Panel C: Ticket Detail */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-2 h-full overflow-hidden">
             <TicketDetailPanel selectedSession={selectedSession} />
           </div>
 
           {/* Panel D: Analytics */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-2 h-full overflow-hidden">
             <AIAnalyticsPanel />
+          </div>
+
+          {/* Panel E: Human Agent Call Panel - Handles incoming calls with transcript & AI suggestions */}
+          <div className="col-span-4 h-full overflow-hidden">
+            <HumanAgentCallPanel
+              twilioCall={twilioCall}
+              isConnected={isConnected}
+              isMuted={isMuted}
+              isOnHold={isOnHold}
+              isDeviceReady={isDeviceReady}
+              isInitializing={isInitializing}
+              answerCall={twilioAnswerCall}
+              rejectCall={twilioRejectCall}
+              hangupCall={twilioHangupCall}
+              toggleMute={toggleMute}
+              toggleHold={toggleHold}
+              retryConnection={retryConnection}
+              incomingDbCall={incomingCall}
+              activeDbCall={activeCall}
+              onCallAnswered={handleCallAnswered}
+              onCallEnded={handleCallEnded}
+            />
           </div>
         </div>
       </div>
