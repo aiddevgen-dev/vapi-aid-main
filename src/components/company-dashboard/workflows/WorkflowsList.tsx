@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +57,9 @@ import { useToast } from '@/hooks/use-toast';
 // Demo backend URL - always use this ngrok URL for Temporal
 const DEMO_BACKEND_URL = 'https://reiko-transactional-vanessa.ngrok-free.dev';
 
+// localStorage key for workflows
+const WORKFLOWS_STORAGE_KEY = 'saved_workflows';
+
 // Trigger source display config
 const triggerSourceConfig: Record<string, { icon: string | React.ReactNode; label: string; color: string }> = {
   hubspot: { icon: '🟠', label: 'HubSpot', color: 'bg-orange-500/10 text-orange-600 border-orange-500/30' },
@@ -69,53 +72,6 @@ const triggerSourceConfig: Record<string, { icon: string | React.ReactNode; labe
   manual: { icon: <Phone className="h-3 w-3" />, label: 'Manual', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30' },
 };
 
-// Mock data with new structure
-const mockWorkflows: Workflow[] = [
-  {
-    id: '1',
-    name: 'New Lead Follow-up',
-    description: 'Automatically call new HubSpot leads within 5 minutes',
-    triggerType: 'temporal-outbound',
-    triggerSource: 'hubspot',
-    status: 'active',
-    tools: ['log-call', 'update-status'],
-    actions: ['outbound-call', 'update-crm'],
-    updatedAt: '2024-01-15T10:30:00Z',
-  },
-  {
-    id: '2',
-    name: 'Salesforce Opportunity Call',
-    description: 'Call prospects when opportunity stage changes',
-    triggerType: 'temporal-outbound',
-    triggerSource: 'salesforce',
-    status: 'active',
-    tools: ['log-call', 'schedule-followup'],
-    actions: ['outbound-call', 'send-email'],
-    updatedAt: '2024-01-14T14:20:00Z',
-  },
-  {
-    id: '3',
-    name: 'Appointment Reminder',
-    description: 'Call customers 1 hour before scheduled appointments',
-    triggerType: 'temporal-outbound',
-    triggerSource: 'calendar',
-    status: 'active',
-    tools: ['log-call', 'update-status'],
-    actions: ['outbound-call', 'send-sms'],
-    updatedAt: '2024-01-13T09:00:00Z',
-  },
-  {
-    id: '4',
-    name: 'Form Submission Callback',
-    description: 'Call leads who submitted contact form',
-    triggerType: 'temporal-outbound',
-    triggerSource: 'form',
-    status: 'inactive',
-    tools: ['log-call'],
-    actions: ['outbound-call'],
-    updatedAt: '2024-01-10T11:15:00Z',
-  },
-];
 
 const getTriggerDisplay = (triggerSource: string) => {
   const config = triggerSourceConfig[triggerSource];
@@ -125,8 +81,30 @@ const getTriggerDisplay = (triggerSource: string) => {
   return config;
 };
 
+// Load workflows from localStorage
+const loadWorkflows = (): Workflow[] => {
+  try {
+    const saved = localStorage.getItem(WORKFLOWS_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load workflows:', e);
+  }
+  return [];
+};
+
+// Save workflows to localStorage
+const saveWorkflows = (workflows: Workflow[]) => {
+  try {
+    localStorage.setItem(WORKFLOWS_STORAGE_KEY, JSON.stringify(workflows));
+  } catch (e) {
+    console.error('Failed to save workflows:', e);
+  }
+};
+
 export const WorkflowsList: React.FC = () => {
-  const [workflows, setWorkflows] = useState<Workflow[]>(mockWorkflows);
+  const [workflows, setWorkflows] = useState<Workflow[]>(loadWorkflows);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
@@ -145,6 +123,11 @@ export const WorkflowsList: React.FC = () => {
   const [isOrchestrationOpen, setIsOrchestrationOpen] = useState(false);
 
   const { toast } = useToast();
+
+  // Save workflows whenever they change
+  useEffect(() => {
+    saveWorkflows(workflows);
+  }, [workflows]);
 
   const filteredWorkflows = workflows.filter((workflow) =>
     workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
