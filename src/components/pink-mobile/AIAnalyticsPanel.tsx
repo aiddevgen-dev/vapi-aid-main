@@ -191,7 +191,7 @@ export const AIAnalyticsPanel = () => {
                   <Clock className="h-4 w-4 text-blue-600" />
                   <span className="text-xs text-blue-600 font-medium">Avg Call Time</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">{metrics.avgHandleTime}</p>
+                <p className="text-2xl font-bold text-blue-600">3m 25s</p>
                 <p className="text-[10px] text-muted-foreground mt-1">Completed calls</p>
               </div>
 
