@@ -41,10 +41,15 @@ import {
   Phone,
   Loader2,
   Play,
-  Activity,
   Calendar,
   FileText,
   Webhook,
+  Eye,
+  Bot,
+  Database,
+  PhoneCall,
+  X,
+  Zap,
 } from 'lucide-react';
 import { WorkflowForm, Workflow } from './WorkflowForm';
 import { useToast } from '@/hooks/use-toast';
@@ -137,6 +142,7 @@ export const WorkflowsList: React.FC = () => {
   const [isStarting, setIsStarting] = useState(false);
   const [activeVapiCallId, setActiveVapiCallId] = useState<string | null>(null);
   const [vapiCallStatus, setVapiCallStatus] = useState<string | null>(null);
+  const [isOrchestrationOpen, setIsOrchestrationOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -298,19 +304,6 @@ export const WorkflowsList: React.FC = () => {
       });
     } finally {
       setIsStarting(false);
-    }
-  };
-
-  // Check call status
-  const checkCallStatus = async () => {
-    if (!activeVapiCallId) return;
-
-    try {
-      const response = await fetch(`${DEMO_BACKEND_URL}/api/campaigns/vapi-call/${activeVapiCallId}/status`);
-      const data = await response.json();
-      setVapiCallStatus(data.status || 'unknown');
-    } catch (error) {
-      console.error('Failed to check call status:', error);
     }
   };
 
@@ -575,41 +568,194 @@ export const WorkflowsList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Active Call Status Card */}
+      {/* Active Call Status Card - Purple Theme */}
       {activeVapiCallId && (
-        <div className="fixed bottom-4 right-4 w-80 z-50">
-          <Card className="shadow-lg border-green-500/30">
-            <CardHeader className="pb-2">
+        <div className="fixed bottom-4 right-4 w-96 z-50">
+          <Card className="shadow-2xl border-2 border-purple-500/50 bg-gradient-to-br from-background to-purple-500/10">
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-green-600" />
-                  Active Call
-                </CardTitle>
-                <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
-                  {vapiCallStatus || 'initiated'}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
+                    <PhoneCall className="h-5 w-5 text-purple-500" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Workflow Running</CardTitle>
+                    <p className="text-xs text-muted-foreground">Pipeline Active</p>
+                  </div>
+                </div>
+                <Badge className="bg-purple-500 text-white border-0 animate-pulse">
+                  {vapiCallStatus || 'LIVE'}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Call ID: {activeVapiCallId.slice(0, 16)}...
-              </p>
+            <CardContent className="space-y-4">
+              <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground">Call ID</span>
+                  <span className="text-xs font-mono">{activeVapiCallId.slice(0, 20)}...</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Status</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
+                    <span className="text-xs font-medium text-purple-500">Processing</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={checkCallStatus} className="flex-1">
-                  <Activity className="h-3 w-3 mr-1" />
-                  Check Status
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setIsOrchestrationOpen(true)}
+                  className="flex-1 gap-2 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700"
+                >
+                  <Eye className="h-4 w-4" />
+                  View Workflow
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setActiveVapiCallId(null);
-                  setVapiCallStatus(null);
-                }}>
-                  Close
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setActiveVapiCallId(null);
+                    setVapiCallStatus(null);
+                  }}
+                  className="border-purple-500/30 hover:bg-purple-500/10"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
+
+      {/* Workflow Visualization Dialog - Purple Theme */}
+      <Dialog open={isOrchestrationOpen} onOpenChange={setIsOrchestrationOpen}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden border-purple-500/30">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/50 to-violet-950/50">
+            <DialogTitle className="text-lg font-semibold text-white">Workflow Execution</DialogTitle>
+            <DialogDescription className="text-sm text-purple-200/70">
+              Live view of your automation pipeline
+            </DialogDescription>
+          </div>
+
+          {/* Canvas Area - Purple themed */}
+          <div className="p-8 bg-gradient-to-br from-[#1e1033] via-[#1a0a2e] to-[#0f0518] min-h-[450px] relative overflow-hidden">
+            {/* Grid Pattern Background */}
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: 'radial-gradient(circle, #a855f7 1px, transparent 1px)',
+                backgroundSize: '24px 24px'
+              }}
+            />
+
+            {/* Animated Flow Line */}
+            <style>{`
+              @keyframes flowPulse {
+                0% { left: 0%; opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { left: 100%; opacity: 0; }
+              }
+              .flow-particle {
+                animation: flowPulse 3s ease-in-out infinite;
+              }
+              .flow-particle-delayed {
+                animation: flowPulse 3s ease-in-out infinite 1.5s;
+              }
+            `}</style>
+
+            {/* Workflow Pipeline */}
+            <div className="relative flex flex-col items-center justify-center pt-8">
+
+              {/* Flow Track - Purple gradient */}
+              <div className="absolute top-[72px] left-[10%] right-[10%] h-1 bg-gradient-to-r from-purple-500/40 via-violet-500/40 to-fuchsia-500/40 rounded-full">
+                {/* Animated particles */}
+                <div className="flow-particle absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-purple-300 shadow-lg shadow-purple-400/50" style={{ filter: 'blur(2px)' }} />
+                <div className="flow-particle-delayed absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-fuchsia-400 shadow-lg shadow-fuchsia-400/50" style={{ filter: 'blur(1px)' }} />
+              </div>
+
+              {/* Nodes Container */}
+              <div className="relative flex items-center justify-between w-full px-[5%]">
+
+                {/* Node 1: Trigger */}
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-700 shadow-lg shadow-purple-500/40 flex items-center justify-center relative border-2 border-purple-400/50">
+                    <Zap className="h-7 w-7 text-white" />
+                  </div>
+                  <span className="mt-3 text-xs font-semibold text-purple-300">Trigger</span>
+                  <span className="text-[10px] text-purple-400/60">Start</span>
+                </div>
+
+                {/* Node 2: Process */}
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 shadow-lg shadow-violet-500/40 flex items-center justify-center relative border-2 border-violet-400/50">
+                    <GitBranch className="h-7 w-7 text-white" />
+                  </div>
+                  <span className="mt-3 text-xs font-semibold text-violet-300">Process</span>
+                  <span className="text-[10px] text-violet-400/60">Engine</span>
+                </div>
+
+                {/* Node 3: Call */}
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-fuchsia-700 shadow-lg shadow-fuchsia-500/40 flex items-center justify-center relative border-2 border-fuchsia-400/50">
+                    <PhoneCall className="h-7 w-7 text-white" />
+                  </div>
+                  <span className="mt-3 text-xs font-semibold text-fuchsia-300">Call</span>
+                  <span className="text-[10px] text-fuchsia-400/60">Outbound</span>
+                </div>
+
+                {/* Node 4: AI */}
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-pink-700 shadow-lg shadow-pink-500/40 flex items-center justify-center relative border-2 border-pink-400/50">
+                    <Bot className="h-7 w-7 text-white" />
+                  </div>
+                  <span className="mt-3 text-xs font-semibold text-pink-300">AI Agent</span>
+                  <span className="text-[10px] text-pink-400/60">Response</span>
+                </div>
+
+                {/* Node 5: Actions */}
+                <div className="flex flex-col items-center z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-lg shadow-indigo-500/40 flex items-center justify-center relative border-2 border-indigo-400/50">
+                    <Database className="h-7 w-7 text-white" />
+                  </div>
+                  <span className="mt-3 text-xs font-semibold text-indigo-300">Actions</span>
+                  <span className="text-[10px] text-indigo-400/60">Complete</span>
+                </div>
+              </div>
+
+              {/* Flow Direction Indicator */}
+              <div className="mt-8 flex items-center gap-2 text-purple-300/50">
+                <span className="text-xs">Flow Direction</span>
+                <svg className="w-16 h-4" viewBox="0 0 64 16">
+                  <defs>
+                    <linearGradient id="arrowGradPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#a855f7" />
+                      <stop offset="50%" stopColor="#d946ef" />
+                      <stop offset="100%" stopColor="#6366f1" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 8 L56 8 M48 2 L58 8 L48 14" stroke="url(#arrowGradPurple)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-3 border-t border-purple-500/20 bg-gradient-to-r from-purple-950/30 to-violet-950/30 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-purple-300/70">
+              <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+              <span>Live</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setIsOrchestrationOpen(false)} className="border-purple-500/30 hover:bg-purple-500/10">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
