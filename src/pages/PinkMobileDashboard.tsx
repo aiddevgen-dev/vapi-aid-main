@@ -11,6 +11,7 @@ import { AIAnalyticsPanel } from '@/components/pink-mobile/AIAnalyticsPanel';
 import { AIOutboundDialer } from '@/components/pink-mobile/AIOutboundDialer';
 import { HumanAgentCallPanel } from '@/components/pink-mobile/HumanAgentCallPanel';
 import { WorkflowTriggerPanel } from '@/components/pink-mobile/WorkflowTriggerPanel';
+import { WorkflowHistoryPanel } from '@/components/shared/WorkflowHistoryPanel';
 import { useTwilioVoice } from '@/hooks/useTwilioVoice';
 import { supabase } from '@/integrations/supabase/client';
 import { Call } from '@/types/call-center';
@@ -383,11 +384,14 @@ export const PinkMobileDashboard = () => {
         <div className="h-full grid grid-cols-12 gap-3">
           {/* Panel A: AI Outbound Dialer & Workflows */}
           <div className="col-span-2 h-full overflow-hidden flex flex-col gap-3">
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="h-[45%] min-h-0 overflow-hidden">
               <AIOutboundDialer onCallMade={handleCallMade} />
             </div>
-            <div className="h-[280px] flex-shrink-0 overflow-hidden">
+            <div className="h-[25%] min-h-0 overflow-hidden">
               <WorkflowTriggerPanel />
+            </div>
+            <div className="h-[30%] min-h-0 overflow-hidden">
+              <WorkflowHistoryPanel variant="compact" />
             </div>
           </div>
 

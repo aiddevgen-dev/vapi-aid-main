@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { WorkflowForm, Workflow } from './WorkflowForm';
 import { useToast } from '@/hooks/use-toast';
+import { WorkflowHistoryPanel } from '@/components/shared/WorkflowHistoryPanel';
 
 // Demo backend URL - always use this ngrok URL for Temporal
 const DEMO_BACKEND_URL = 'https://reiko-transactional-vanessa.ngrok-free.dev';
@@ -449,6 +450,9 @@ export const WorkflowsList: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* Workflow Orchestration History */}
+      <WorkflowHistoryPanel variant="full" />
 
       {/* Workflow Form Dialog */}
       <WorkflowForm
