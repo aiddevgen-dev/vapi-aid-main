@@ -39,120 +39,86 @@ import {
   Copy,
   GitBranch,
   Phone,
-  PhoneIncoming,
-  PhoneOutgoing,
-  MessageSquare,
-  Clock,
-  Zap,
+  Loader2,
   Play,
   Activity,
-  Loader2,
+  Calendar,
+  FileText,
+  Webhook,
 } from 'lucide-react';
 import { WorkflowForm, Workflow } from './WorkflowForm';
-import { CampaignExecutionPanel } from './WorkflowExecutionPanel';
 import { useToast } from '@/hooks/use-toast';
-import { temporalService } from '@/services/temporalService';
 
-// Demo backend URL - always use this ngrok URL
+// Demo backend URL - always use this ngrok URL for Temporal
 const DEMO_BACKEND_URL = 'https://reiko-transactional-vanessa.ngrok-free.dev';
 
-// Mock data
+// Trigger source display config
+const triggerSourceConfig: Record<string, { icon: string | React.ReactNode; label: string; color: string }> = {
+  hubspot: { icon: '🟠', label: 'HubSpot', color: 'bg-orange-500/10 text-orange-600 border-orange-500/30' },
+  salesforce: { icon: '☁️', label: 'Salesforce', color: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
+  pipedrive: { icon: '🟢', label: 'Pipedrive', color: 'bg-green-500/10 text-green-600 border-green-500/30' },
+  zoho: { icon: '🔴', label: 'Zoho CRM', color: 'bg-red-500/10 text-red-600 border-red-500/30' },
+  webhook: { icon: <Webhook className="h-3 w-3" />, label: 'Webhook', color: 'bg-purple-500/10 text-purple-600 border-purple-500/30' },
+  calendar: { icon: <Calendar className="h-3 w-3" />, label: 'Calendar', color: 'bg-blue-500/10 text-blue-600 border-blue-500/30' },
+  form: { icon: <FileText className="h-3 w-3" />, label: 'Form', color: 'bg-gray-500/10 text-gray-600 border-gray-500/30' },
+  manual: { icon: <Phone className="h-3 w-3" />, label: 'Manual', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/30' },
+};
+
+// Mock data with new structure
 const mockWorkflows: Workflow[] = [
   {
     id: '1',
-    name: 'Inbound Sales Call Handler',
-    description: 'Handle incoming sales inquiries with AI-powered qualification',
-    triggerType: 'inbound-call',
+    name: 'New Lead Follow-up',
+    description: 'Automatically call new HubSpot leads within 5 minutes',
+    triggerType: 'temporal-outbound',
+    triggerSource: 'hubspot',
     status: 'active',
-    aiAgentId: '1',
-    tools: ['transfer', 'order-status', 'appointment'],
-    endOfCallActions: ['summary-crm', 'followup-email'],
+    tools: ['log-call', 'update-status'],
+    actions: ['outbound-call', 'update-crm'],
     updatedAt: '2024-01-15T10:30:00Z',
   },
   {
     id: '2',
-    name: 'Support Ticket Escalation',
-    description: 'Escalate complex support issues to human agents',
-    triggerType: 'inbound-call',
+    name: 'Salesforce Opportunity Call',
+    description: 'Call prospects when opportunity stage changes',
+    triggerType: 'temporal-outbound',
+    triggerSource: 'salesforce',
     status: 'active',
-    aiAgentId: '2',
-    tools: ['transfer', 'create-ticket'],
-    endOfCallActions: ['zendesk-ticket'],
+    tools: ['log-call', 'schedule-followup'],
+    actions: ['outbound-call', 'send-email'],
     updatedAt: '2024-01-14T14:20:00Z',
   },
   {
     id: '3',
-    name: 'Outbound Appointment Reminder',
-    description: 'Automated appointment confirmation calls',
-    triggerType: 'outbound-call',
+    name: 'Appointment Reminder',
+    description: 'Call customers 1 hour before scheduled appointments',
+    triggerType: 'temporal-outbound',
+    triggerSource: 'calendar',
     status: 'active',
-    aiAgentId: '3',
-    tools: ['appointment', 'send-sms'],
-    endOfCallActions: ['update-lead'],
+    tools: ['log-call', 'update-status'],
+    actions: ['outbound-call', 'send-sms'],
     updatedAt: '2024-01-13T09:00:00Z',
   },
   {
     id: '4',
-    name: 'After Hours Message',
-    description: 'Handle calls outside business hours',
-    triggerType: 'time-based',
+    name: 'Form Submission Callback',
+    description: 'Call leads who submitted contact form',
+    triggerType: 'temporal-outbound',
+    triggerSource: 'form',
     status: 'inactive',
-    aiAgentId: '1',
-    tools: ['send-email'],
-    endOfCallActions: ['summary-crm'],
+    tools: ['log-call'],
+    actions: ['outbound-call'],
     updatedAt: '2024-01-10T11:15:00Z',
   },
 ];
 
-const getTriggerIcon = (type: string) => {
-  switch (type) {
-    case 'inbound-call':
-      return <PhoneIncoming className="h-4 w-4" />;
-    case 'outbound-call':
-      return <PhoneOutgoing className="h-4 w-4" />;
-    case 'temporal-outbound':
-      return <PhoneOutgoing className="h-4 w-4" />;
-    case 'chat-message':
-      return <MessageSquare className="h-4 w-4" />;
-    case 'time-based':
-      return <Clock className="h-4 w-4" />;
-    case 'webhook':
-      return <Zap className="h-4 w-4" />;
-    default:
-      return <Phone className="h-4 w-4" />;
+const getTriggerDisplay = (triggerSource: string) => {
+  const config = triggerSourceConfig[triggerSource];
+  if (!config) {
+    return { icon: <Phone className="h-3 w-3" />, label: triggerSource, color: 'bg-gray-500/10 text-gray-600 border-gray-500/30' };
   }
+  return config;
 };
-
-const getTriggerLabel = (type: string) => {
-  switch (type) {
-    case 'inbound-call':
-      return 'Inbound Call';
-    case 'outbound-call':
-      return 'Outbound Call';
-    case 'temporal-outbound':
-      return 'Temporal VAPI Call';
-    case 'chat-message':
-      return 'Chat Message';
-    case 'time-based':
-      return 'Time-Based';
-    case 'webhook':
-      return 'Webhook';
-    case 'keyword':
-      return 'Keyword Detected';
-    default:
-      return type;
-  }
-};
-
-// Campaign configuration for running workflows
-interface CampaignConfig {
-  campaignId: string;
-  companyId: string;
-  batchSize: number;
-  callWindowStart: string;
-  callWindowEnd: string;
-  maxConcurrentCalls: number;
-}
 
 export const WorkflowsList: React.FC = () => {
   const [workflows, setWorkflows] = useState<Workflow[]>(mockWorkflows);
@@ -161,30 +127,14 @@ export const WorkflowsList: React.FC = () => {
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [deletingWorkflow, setDeletingWorkflow] = useState<Workflow | null>(null);
 
-  // Temporal integration state
-  const [runningWorkflow, setRunningWorkflow] = useState<Workflow | null>(null);
-  const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
-  const [campaignConfig, setCampaignConfig] = useState<CampaignConfig>({
-    campaignId: '',
-    companyId: 'demo-company',
-    batchSize: 10,
-    callWindowStart: '09:00',
-    callWindowEnd: '17:00',
-    maxConcurrentCalls: 3,
-  });
-
   // Temporal VAPI call state
   const [isVapiDialogOpen, setIsVapiDialogOpen] = useState(false);
-  const [selectedTemporalWorkflow, setSelectedTemporalWorkflow] = useState<Workflow | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
   const [vapiCallConfig, setVapiCallConfig] = useState({
     phoneNumber: '',
     customerName: '',
-    campaignId: '',
-    assistantId: '',
-    phoneNumberId: '',
   });
+  const [isStarting, setIsStarting] = useState(false);
   const [activeVapiCallId, setActiveVapiCallId] = useState<string | null>(null);
   const [vapiCallStatus, setVapiCallStatus] = useState<string | null>(null);
 
@@ -255,11 +205,11 @@ export const WorkflowsList: React.FC = () => {
         id: Date.now().toString(),
         name: workflowData.name || 'New Workflow',
         description: workflowData.description || '',
-        triggerType: workflowData.triggerType || 'inbound-call',
-        status: 'inactive',
-        aiAgentId: workflowData.aiAgentId || '',
+        triggerType: workflowData.triggerType || 'temporal-outbound',
+        triggerSource: workflowData.triggerSource || 'manual',
+        status: workflowData.status || 'inactive',
         tools: workflowData.tools || [],
-        endOfCallActions: workflowData.endOfCallActions || [],
+        actions: workflowData.actions || [],
         updatedAt: new Date().toISOString(),
       };
       setWorkflows([...workflows, newWorkflow]);
@@ -280,70 +230,15 @@ export const WorkflowsList: React.FC = () => {
     });
   };
 
-  // Temporal workflow handlers
+  // Run workflow - opens dialog to enter phone number
   const handleRunWorkflow = (workflow: Workflow) => {
-    // Special handling for Temporal Outbound workflows
-    if (workflow.triggerType === 'temporal-outbound') {
-      setSelectedTemporalWorkflow(workflow);
-      setVapiCallConfig({ phoneNumber: '', customerName: '', campaignId: '', assistantId: '', phoneNumberId: '' });
-      setIsVapiDialogOpen(true);
-      return;
-    }
-
-    setRunningWorkflow(workflow);
-    setCampaignConfig({
-      ...campaignConfig,
-      campaignId: `campaign-${workflow.id}-${Date.now()}`,
-    });
-    setIsRunDialogOpen(true);
+    setSelectedWorkflow(workflow);
+    setVapiCallConfig({ phoneNumber: '', customerName: '' });
+    setIsVapiDialogOpen(true);
   };
 
-  const handleStartWorkflow = async () => {
-    if (!runningWorkflow) return;
-
-    setIsStarting(true);
-    try {
-      // Determine workflow type based on trigger
-      if (runningWorkflow.triggerType === 'outbound-call') {
-        // Start lead processing workflow
-        const result = await temporalService.startLeadProcessingWorkflow({
-          campaignId: campaignConfig.campaignId,
-          companyId: campaignConfig.companyId,
-          batchSize: campaignConfig.batchSize,
-          callWindowStart: campaignConfig.callWindowStart,
-          callWindowEnd: campaignConfig.callWindowEnd,
-          maxConcurrentCalls: campaignConfig.maxConcurrentCalls,
-          aiAgentId: runningWorkflow.aiAgentId || '',
-        });
-
-        setActiveWorkflowId(result.workflowId);
-        toast({
-          title: 'Campaign Started',
-          description: `${runningWorkflow.name} is now running. Workflow ID: ${result.workflowId.slice(0, 12)}...`,
-        });
-      } else {
-        // For other trigger types, show a message (they would be triggered by events)
-        toast({
-          title: 'Workflow Activated',
-          description: `${runningWorkflow.name} is now listening for ${getTriggerLabel(runningWorkflow.triggerType)} events.`,
-        });
-      }
-
-      setIsRunDialogOpen(false);
-      setRunningWorkflow(null);
-    } catch (error) {
-      toast({
-        title: 'Failed to Start Workflow',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsStarting(false);
-    }
-  };
-
-  // Temporal VAPI call handler
-  const handleStartVapiCall = async () => {
+  // Start the actual call via Temporal backend
+  const handleStartCall = async () => {
     if (!vapiCallConfig.phoneNumber) {
       toast({
         title: 'Phone Number Required',
@@ -355,18 +250,23 @@ export const WorkflowsList: React.FC = () => {
 
     setIsStarting(true);
     try {
-      // Build payload with workflow config and call details
+      // Build payload for Temporal backend
       const payload: Record<string, string> = {
         phoneNumber: vapiCallConfig.phoneNumber,
       };
-      if (vapiCallConfig.customerName) payload.customerName = vapiCallConfig.customerName;
-      if (selectedTemporalWorkflow?.vapiAssistantId) payload.assistantId = selectedTemporalWorkflow.vapiAssistantId;
-      if (selectedTemporalWorkflow?.vapiPhoneNumberId) payload.phoneNumberId = selectedTemporalWorkflow.vapiPhoneNumberId;
-      if (vapiCallConfig.campaignId) payload.campaignId = vapiCallConfig.campaignId;
+      if (vapiCallConfig.customerName) {
+        payload.customerName = vapiCallConfig.customerName;
+      }
+      // Add workflow context
+      if (selectedWorkflow?.id) {
+        payload.workflowId = selectedWorkflow.id;
+      }
+      if (selectedWorkflow?.triggerSource) {
+        payload.triggerSource = selectedWorkflow.triggerSource;
+      }
 
-      // Always use demo backend URL
-      const serverUrl = DEMO_BACKEND_URL;
-      const response = await fetch(`${serverUrl}/api/campaigns/trigger-vapi-call`, {
+      // Call Temporal backend
+      const response = await fetch(`${DEMO_BACKEND_URL}/api/campaigns/trigger-vapi-call`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -385,11 +285,11 @@ export const WorkflowsList: React.FC = () => {
 
       toast({
         title: 'Call Initiated',
-        description: `Calling ${vapiCallConfig.phoneNumber}... Call ID: ${data.callId || data.call_id}`,
+        description: `Calling ${vapiCallConfig.phoneNumber}...`,
       });
 
       setIsVapiDialogOpen(false);
-      setVapiCallConfig({ phoneNumber: '', customerName: '', campaignId: '', assistantId: '', phoneNumberId: '' });
+      setVapiCallConfig({ phoneNumber: '', customerName: '' });
     } catch (error) {
       toast({
         title: 'Failed to Start Call',
@@ -401,14 +301,12 @@ export const WorkflowsList: React.FC = () => {
     }
   };
 
-  // Check VAPI call status
-  const checkVapiCallStatus = async () => {
+  // Check call status
+  const checkCallStatus = async () => {
     if (!activeVapiCallId) return;
 
     try {
-      // Always use demo backend URL
-      const serverUrl = DEMO_BACKEND_URL;
-      const response = await fetch(`${serverUrl}/api/campaigns/vapi-call/${activeVapiCallId}/status`);
+      const response = await fetch(`${DEMO_BACKEND_URL}/api/campaigns/vapi-call/${activeVapiCallId}/status`);
       const data = await response.json();
       setVapiCallStatus(data.status || 'unknown');
     } catch (error) {
@@ -424,7 +322,7 @@ export const WorkflowsList: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Workflows</h1>
-          <p className="text-muted-foreground">Configure AI agent behaviors and automations</p>
+          <p className="text-muted-foreground">Automate outbound calls based on CRM events</p>
         </div>
         <Button onClick={() => setIsFormOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" />
@@ -465,7 +363,7 @@ export const WorkflowsList: React.FC = () => {
             <p className="text-muted-foreground text-center mb-4">
               {searchQuery
                 ? 'Try adjusting your search'
-                : 'Create your first workflow to automate AI agent behaviors'}
+                : 'Create your first workflow to automate outbound calls'}
             </p>
             {!searchQuery && (
               <Button onClick={() => setIsFormOpen(true)}>
@@ -477,99 +375,102 @@ export const WorkflowsList: React.FC = () => {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredWorkflows.map((workflow) => (
-            <Card key={workflow.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                      workflow.status === 'active'
-                        ? 'bg-green-500/10 text-green-600'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
-                      <GitBranch className="h-5 w-5" />
+          {filteredWorkflows.map((workflow) => {
+            const triggerDisplay = getTriggerDisplay(workflow.triggerSource || 'manual');
+            return (
+              <Card key={workflow.id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                        workflow.status === 'active'
+                          ? 'bg-green-500/10 text-green-600'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <GitBranch className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base">{workflow.name}</CardTitle>
+                        <CardDescription className="line-clamp-1">
+                          {workflow.description}
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-base">{workflow.name}</CardTitle>
-                      <CardDescription className="line-clamp-1">
-                        {workflow.description}
-                      </CardDescription>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(workflow)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(workflow)}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(workflow)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Trigger Source Badge */}
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={`gap-1.5 ${triggerDisplay.color}`}>
+                      <span className="text-sm">{typeof triggerDisplay.icon === 'string' ? triggerDisplay.icon : triggerDisplay.icon}</span>
+                      {triggerDisplay.label}
+                    </Badge>
+                  </div>
+
+                  {/* Actions Summary */}
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span>{workflow.actions?.length || 0} actions</span>
+                    <span>•</span>
+                    <span>{workflow.tools?.length || 0} post-call actions</span>
+                  </div>
+
+                  {/* Status Toggle & Run Button */}
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={workflow.status === 'active'}
+                        onCheckedChange={() => handleToggleStatus(workflow)}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {workflow.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(workflow.updatedAt)}
+                      </span>
+                      {workflow.status === 'active' && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleRunWorkflow(workflow)}
+                          className="gap-1 h-7"
+                        >
+                          <Play className="h-3 w-3" />
+                          Run
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEdit(workflow)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDuplicate(workflow)}>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => handleDelete(workflow)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Trigger Type */}
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="gap-1">
-                    {getTriggerIcon(workflow.triggerType)}
-                    {getTriggerLabel(workflow.triggerType)}
-                  </Badge>
-                </div>
-
-                {/* Tools Count */}
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{workflow.tools.length} tools configured</span>
-                  <span>•</span>
-                  <span>{workflow.endOfCallActions.length} end actions</span>
-                </div>
-
-                {/* Status Toggle & Run Button */}
-                <div className="flex items-center justify-between pt-3 border-t">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={workflow.status === 'active'}
-                      onCheckedChange={() => handleToggleStatus(workflow)}
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {workflow.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(workflow.updatedAt)}
-                    </span>
-                    {workflow.status === 'active' && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleRunWorkflow(workflow)}
-                        className="gap-1 h-7"
-                      >
-                        <Play className="h-3 w-3" />
-                        Run
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -602,228 +503,54 @@ export const WorkflowsList: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Run Workflow Dialog */}
-      <Dialog open={isRunDialogOpen} onOpenChange={setIsRunDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+      {/* Run Workflow Dialog - Enter Phone Number */}
+      <Dialog open={isVapiDialogOpen} onOpenChange={setIsVapiDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Play className="h-5 w-5" />
+              <Phone className="h-5 w-5" />
               Run Workflow
             </DialogTitle>
             <DialogDescription>
-              Configure and start "{runningWorkflow?.name}"
-            </DialogDescription>
-          </DialogHeader>
-
-          {runningWorkflow?.triggerType === 'outbound-call' ? (
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="batchSize">Batch Size</Label>
-                  <Input
-                    id="batchSize"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={campaignConfig.batchSize}
-                    onChange={(e) => setCampaignConfig({
-                      ...campaignConfig,
-                      batchSize: parseInt(e.target.value) || 10,
-                    })}
-                  />
-                  <p className="text-xs text-muted-foreground">Leads to process per batch</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxConcurrent">Concurrent Calls</Label>
-                  <Input
-                    id="maxConcurrent"
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={campaignConfig.maxConcurrentCalls}
-                    onChange={(e) => setCampaignConfig({
-                      ...campaignConfig,
-                      maxConcurrentCalls: parseInt(e.target.value) || 3,
-                    })}
-                  />
-                  <p className="text-xs text-muted-foreground">Max simultaneous calls</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="windowStart">Call Window Start</Label>
-                  <Input
-                    id="windowStart"
-                    type="time"
-                    value={campaignConfig.callWindowStart}
-                    onChange={(e) => setCampaignConfig({
-                      ...campaignConfig,
-                      callWindowStart: e.target.value,
-                    })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="windowEnd">Call Window End</Label>
-                  <Input
-                    id="windowEnd"
-                    type="time"
-                    value={campaignConfig.callWindowEnd}
-                    onChange={(e) => setCampaignConfig({
-                      ...campaignConfig,
-                      callWindowEnd: e.target.value,
-                    })}
-                  />
-                </div>
-              </div>
-              <div className="p-3 bg-muted/50 rounded-lg text-sm">
-                <p className="font-medium mb-1">Workflow will:</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                  <li>Fetch leads from database</li>
-                  <li>Initiate outbound calls using AI agent</li>
-                  <li>Track call outcomes and update lead status</li>
-                  <li>Execute {runningWorkflow?.endOfCallActions.length || 0} end-of-call actions</li>
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="py-4">
-              <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-700">Event-Triggered Workflow</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  This workflow will activate and wait for {getTriggerLabel(runningWorkflow?.triggerType || '')} events.
-                  Each incoming event will trigger the workflow automatically.
-                </p>
-              </div>
-              <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm">
-                <p className="font-medium mb-1">On trigger, workflow will:</p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                  <li>Handle call with AI agent</li>
-                  <li>Use {runningWorkflow?.tools.length || 0} configured tools</li>
-                  <li>Detect intent and escalate if needed</li>
-                  <li>Execute {runningWorkflow?.endOfCallActions.length || 0} end-of-call actions</li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRunDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleStartWorkflow} disabled={isStarting} className="gap-2">
-              {isStarting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  Start Workflow
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Active Campaign Panel */}
-      {activeWorkflowId && (
-        <div className="fixed bottom-4 right-4 w-96 z-50 shadow-lg">
-          <CampaignExecutionPanel
-            workflowId={activeWorkflowId}
-            campaignName="Outbound Campaign"
-            onClose={() => setActiveWorkflowId(null)}
-          />
-        </div>
-      )}
-
-      {/* Temporal VAPI Call Dialog */}
-      <Dialog open={isVapiDialogOpen} onOpenChange={setIsVapiDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-purple-600" />
-              Temporal VAPI Call
-            </DialogTitle>
-            <DialogDescription>
-              Trigger an outbound call via deployed Temporal workflow
+              {selectedWorkflow?.name} - Enter contact details to initiate call
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <Label htmlFor="phoneNumber">Phone Number *</Label>
-                <Input
-                  id="phoneNumber"
-                  placeholder="+1234567890"
-                  value={vapiCallConfig.phoneNumber}
-                  onChange={(e) => setVapiCallConfig({
-                    ...vapiCallConfig,
-                    phoneNumber: e.target.value,
-                  })}
-                />
-                <p className="text-xs text-muted-foreground">E.164 format required</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerName">Customer Name</Label>
-                <Input
-                  id="customerName"
-                  placeholder="John Doe"
-                  value={vapiCallConfig.customerName}
-                  onChange={(e) => setVapiCallConfig({
-                    ...vapiCallConfig,
-                    customerName: e.target.value,
-                  })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="campaignId">Campaign ID</Label>
-                <Input
-                  id="campaignId"
-                  placeholder="uuid"
-                  value={vapiCallConfig.campaignId}
-                  onChange={(e) => setVapiCallConfig({
-                    ...vapiCallConfig,
-                    campaignId: e.target.value,
-                  })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="assistantId">Assistant ID</Label>
-                <Input
-                  id="assistantId"
-                  placeholder="vapi-asst-xxx"
-                  value={vapiCallConfig.assistantId}
-                  onChange={(e) => setVapiCallConfig({
-                    ...vapiCallConfig,
-                    assistantId: e.target.value,
-                  })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phoneNumberId">Phone Number ID</Label>
-                <Input
-                  id="phoneNumberId"
-                  placeholder="vapi-phone-xxx"
-                  value={vapiCallConfig.phoneNumberId}
-                  onChange={(e) => setVapiCallConfig({
-                    ...vapiCallConfig,
-                    phoneNumberId: e.target.value,
-                  })}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number *</Label>
+              <Input
+                id="phoneNumber"
+                placeholder="+1234567890"
+                value={vapiCallConfig.phoneNumber}
+                onChange={(e) => setVapiCallConfig({
+                  ...vapiCallConfig,
+                  phoneNumber: e.target.value,
+                })}
+              />
+              <p className="text-xs text-muted-foreground">E.164 format (e.g., +14155551234)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="customerName">Customer Name (Optional)</Label>
+              <Input
+                id="customerName"
+                placeholder="John Doe"
+                value={vapiCallConfig.customerName}
+                onChange={(e) => setVapiCallConfig({
+                  ...vapiCallConfig,
+                  customerName: e.target.value,
+                })}
+              />
             </div>
 
-            <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg text-sm">
-              <p className="font-medium mb-1 text-purple-700">Temporal Workflow</p>
-              <p className="text-muted-foreground text-xs">
-                Triggers VAPI outbound call via deployed Temporal server. Optional fields use defaults if empty.
-              </p>
+            {/* Workflow Info */}
+            <div className="p-3 bg-muted/50 rounded-lg text-sm">
+              <p className="font-medium mb-1">This workflow will:</p>
+              <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                <li>Initiate an AI-powered outbound call</li>
+                <li>Execute {selectedWorkflow?.actions?.length || 0} configured actions</li>
+                <li>Run {selectedWorkflow?.tools?.length || 0} post-call automations</li>
+              </ul>
             </div>
           </div>
 
@@ -831,11 +558,11 @@ export const WorkflowsList: React.FC = () => {
             <Button variant="outline" onClick={() => setIsVapiDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleStartVapiCall} disabled={isStarting} className="gap-2 bg-purple-600 hover:bg-purple-700">
+            <Button onClick={handleStartCall} disabled={isStarting} className="gap-2">
               {isStarting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Calling...
+                  Starting...
                 </>
               ) : (
                 <>
@@ -848,17 +575,17 @@ export const WorkflowsList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Active VAPI Call Status */}
+      {/* Active Call Status Card */}
       {activeVapiCallId && (
         <div className="fixed bottom-4 right-4 w-80 z-50">
-          <Card className="shadow-lg border-purple-500/30">
+          <Card className="shadow-lg border-green-500/30">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-purple-600" />
+                  <Phone className="h-4 w-4 text-green-600" />
                   Active Call
                 </CardTitle>
-                <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
                   {vapiCallStatus || 'initiated'}
                 </Badge>
               </div>
@@ -868,7 +595,7 @@ export const WorkflowsList: React.FC = () => {
                 Call ID: {activeVapiCallId.slice(0, 16)}...
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={checkVapiCallStatus} className="flex-1">
+                <Button variant="outline" size="sm" onClick={checkCallStatus} className="flex-1">
                   <Activity className="h-3 w-3 mr-1" />
                   Check Status
                 </Button>
