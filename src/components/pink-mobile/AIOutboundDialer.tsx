@@ -186,60 +186,57 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
 
   return (
     <Card className="h-full flex flex-col bg-card border-border border-2 border-pink-500/30">
-      <CardHeader className="pb-2 pt-3 flex-shrink-0">
-        <CardTitle className="text-base flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-white" />
+      <CardHeader className="pb-2 pt-2 lg:pt-3 px-2 lg:px-4 flex-shrink-0">
+        <CardTitle className="text-sm lg:text-base flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
+            <div className="w-6 h-6 lg:w-8 lg:h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+              <Bot className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
             </div>
-            <div>
-              <span className="font-semibold">AI Outbound</span>
-              <p className="text-[10px] text-muted-foreground font-normal">Sara AI Calling</p>
+            <div className="min-w-0">
+              <span className="font-semibold text-xs lg:text-sm">AI Outbound</span>
+              <p className="text-[9px] lg:text-[10px] text-muted-foreground font-normal truncate">Sara AI</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={fetchCustomers}
               disabled={isLoadingCustomers}
-              className="h-6 w-6"
+              className="h-5 w-5 lg:h-6 lg:w-6"
             >
-              <RefreshCw className={`h-3 w-3 ${isLoadingCustomers ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-2.5 w-2.5 lg:h-3 lg:w-3 ${isLoadingCustomers ? 'animate-spin' : ''}`} />
             </Button>
-            <Badge className="bg-green-500/10 text-green-600 border-green-500/30">Ready</Badge>
+            <Badge className="bg-green-500/10 text-green-600 border-green-500/30 text-[9px] lg:text-[10px] px-1 lg:px-1.5">Ready</Badge>
           </div>
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden pt-2 pb-3 flex flex-col gap-3">
+      <CardContent className="flex-1 overflow-hidden pt-1 lg:pt-2 pb-2 lg:pb-3 px-2 lg:px-4 flex flex-col gap-2 lg:gap-3">
         {/* Manual Number Input */}
-        <div className="p-2.5 rounded-lg border-2 border-dashed border-pink-500/30 bg-pink-500/5">
-          <p className="text-[10px] text-muted-foreground mb-2 flex items-center gap-1">
-            <Phone className="h-3 w-3" /> Quick Dial - Enter any number
+        <div className="p-2 lg:p-2.5 rounded-lg border-2 border-dashed border-pink-500/30 bg-pink-500/5">
+          <p className="text-[9px] lg:text-[10px] text-muted-foreground mb-1.5 lg:mb-2 flex items-center gap-1">
+            <Phone className="h-2.5 w-2.5 lg:h-3 lg:w-3" /> Quick Dial
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 lg:gap-2">
             <Input
               placeholder="+1234567890"
               value={manualNumber}
               onChange={(e) => setManualNumber(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && makeOutboundCall(manualNumber)}
-              className="h-8 text-xs font-mono flex-1"
+              className="h-7 lg:h-8 text-[10px] lg:text-xs font-mono flex-1"
               disabled={!!callingNumber}
             />
             <Button
               size="sm"
               onClick={() => makeOutboundCall(manualNumber)}
               disabled={!manualNumber.trim() || !!callingNumber}
-              className="bg-pink-600 hover:bg-pink-700 text-white h-8 px-3 text-xs"
+              className="bg-pink-600 hover:bg-pink-700 text-white h-7 lg:h-8 px-2 lg:px-3 text-[10px] lg:text-xs"
             >
               {callingNumber === manualNumber ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
-                <>
-                  <Phone className="h-3 w-3 mr-1" />
-                  Call
-                </>
+                <Phone className="h-3 w-3" />
               )}
             </Button>
           </div>
@@ -247,61 +244,62 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 lg:h-3.5 lg:w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search customers..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-8 text-xs"
+            className="h-7 lg:h-8 pl-7 lg:pl-8 text-[10px] lg:text-xs"
           />
         </div>
 
         {/* Customer List */}
-        <div className="flex-1 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              Pink Mobile Customers
+        <div className="flex-1 overflow-hidden min-h-0">
+          <div className="flex items-center justify-between mb-1.5 lg:mb-2">
+            <p className="text-[10px] lg:text-xs text-muted-foreground flex items-center gap-1">
+              <Users className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+              <span className="hidden lg:inline">Pink Mobile </span>Customers
             </p>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[9px] lg:text-[10px] px-1">
               {filteredCustomers.length}
             </Badge>
           </div>
 
           {isLoadingCustomers ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-pink-500" />
+            <div className="flex items-center justify-center py-4 lg:py-8">
+              <Loader2 className="h-4 w-4 lg:h-5 lg:w-5 animate-spin text-pink-500" />
             </div>
           ) : filteredCustomers.length === 0 ? (
-            <div className="text-center py-6">
-              <Users className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No customers found</p>
+            <div className="text-center py-4 lg:py-6">
+              <Users className="h-5 w-5 lg:h-6 lg:w-6 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-[10px] lg:text-sm text-muted-foreground">No customers</p>
             </div>
           ) : (
-            <ScrollArea className="h-[calc(100%-2rem)]">
-              <div className="space-y-2 pr-2">
+            <ScrollArea className="h-full">
+              <div className="space-y-1.5 lg:space-y-2 pr-1 lg:pr-2">
                 {filteredCustomers.map((customer) => (
                   <div
                     key={customer.id}
-                    className="p-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 hover:border-pink-500/40 transition-colors"
+                    className="p-1.5 lg:p-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 hover:border-pink-500/40 transition-colors"
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-1.5 lg:gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{customer.name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{customer.phone}</p>
+                        <p className="font-medium text-[10px] lg:text-sm truncate">{customer.name}</p>
+                        <p className="text-[9px] lg:text-xs text-muted-foreground font-mono truncate">{customer.phone}</p>
                       </div>
                       <Button
                         size="sm"
                         onClick={() => makeOutboundCall(customer.phone, customer.name)}
                         disabled={!!callingNumber}
-                        className="bg-pink-600 hover:bg-pink-700 text-white h-7 px-3 text-xs flex-shrink-0"
+                        className="bg-pink-600 hover:bg-pink-700 text-white h-6 lg:h-7 w-6 lg:w-auto lg:px-2 p-0 text-[10px] lg:text-xs flex-shrink-0"
+                        title="AI Call"
                       >
                         {callingNumber === customer.phone ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
                           <>
-                            <Bot className="h-3 w-3 mr-1" />
-                            AI Call
+                            <Bot className="h-3 w-3" />
+                            <span className="hidden lg:inline ml-1">Call</span>
                           </>
                         )}
                       </Button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -54,12 +54,10 @@ import {
 import { WorkflowForm, Workflow } from './WorkflowForm';
 import { useToast } from '@/hooks/use-toast';
 import { WorkflowHistoryPanel } from '@/components/shared/WorkflowHistoryPanel';
+import { supabase } from '@/integrations/supabase/client';
 
 // Demo backend URL - always use this ngrok URL for Temporal
 const DEMO_BACKEND_URL = 'https://reiko-transactional-vanessa.ngrok-free.dev';
-
-// localStorage key for workflows
-const WORKFLOWS_STORAGE_KEY = 'saved_workflows';
 
 // Trigger source display config
 const triggerSourceConfig: Record<string, { icon: string | React.ReactNode; label: string; color: string }> = {
@@ -82,34 +80,31 @@ const getTriggerDisplay = (triggerSource: string) => {
   return config;
 };
 
-// Load workflows from localStorage
-const loadWorkflows = (): Workflow[] => {
-  try {
-    const saved = localStorage.getItem(WORKFLOWS_STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (e) {
-    console.error('Failed to load workflows:', e);
-  }
-  return [];
-};
-
-// Save workflows to localStorage
-const saveWorkflows = (workflows: Workflow[]) => {
-  try {
-    localStorage.setItem(WORKFLOWS_STORAGE_KEY, JSON.stringify(workflows));
-  } catch (e) {
-    console.error('Failed to save workflows:', e);
-  }
-};
+// Helper to convert DB row to Workflow interface
+const dbRowToWorkflow = (row: any): Workflow => ({
+  id: row.id,
+  name: row.name,
+  description: row.description || '',
+  triggerType: row.trigger_type || 'temporal-outbound',
+  triggerSource: row.trigger_source || 'manual',
+  status: row.status as 'active' | 'inactive',
+  tools: row.tools || [],
+  actions: row.actions || [],
+  webhookUrl: row.webhook_url,
+  updatedAt: row.updated_at,
+  aiAgentId: row.ai_agent_id,
+  vapiAssistantId: row.vapi_assistant_id,
+  vapiPhoneNumberId: row.vapi_phone_number_id,
+});
 
 export const WorkflowsList: React.FC = () => {
-  const [workflows, setWorkflows] = useState<Workflow[]>(loadWorkflows);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [deletingWorkflow, setDeletingWorkflow] = useState<Workflow | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   // Temporal VAPI call state
   const [isVapiDialogOpen, setIsVapiDialogOpen] = useState(false);
@@ -125,10 +120,54 @@ export const WorkflowsList: React.FC = () => {
 
   const { toast } = useToast();
 
-  // Save workflows whenever they change
+  // Fetch company ID and workflows from database
+  const fetchWorkflows = useCallback(async () => {
+    try {
+      setIsLoading(true);
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No user found');
+        setIsLoading(false);
+        return;
+      }
+
+      // Get company ID
+      const { data: companyData } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (companyData) {
+        setCompanyId(companyData.id);
+
+        // Fetch workflows for this company
+        // Note: Using type assertion until migration is run and types are regenerated
+        const { data: workflowsData, error } = await (supabase
+          .from('workflows' as any)
+          .select('*')
+          .eq('company_id', companyData.id)
+          .order('updated_at', { ascending: false }) as any);
+
+        if (error) {
+          console.error('Error fetching workflows:', error);
+        } else {
+          setWorkflows((workflowsData || []).map(dbRowToWorkflow));
+        }
+      }
+    } catch (err) {
+      console.error('Error in fetchWorkflows:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch workflows on mount
   useEffect(() => {
-    saveWorkflows(workflows);
-  }, [workflows]);
+    fetchWorkflows();
+  }, [fetchWorkflows]);
 
   const filteredWorkflows = workflows.filter((workflow) =>
     workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -144,72 +183,189 @@ export const WorkflowsList: React.FC = () => {
     setDeletingWorkflow(workflow);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deletingWorkflow) {
-      setWorkflows(workflows.filter((w) => w.id !== deletingWorkflow.id));
-      toast({
-        title: 'Workflow Deleted',
-        description: `"${deletingWorkflow.name}" has been removed.`,
-      });
-      setDeletingWorkflow(null);
+      try {
+        const { error } = await (supabase
+          .from('workflows' as any)
+          .delete()
+          .eq('id', deletingWorkflow.id) as any);
+
+        if (error) throw error;
+
+        setWorkflows(workflows.filter((w) => w.id !== deletingWorkflow.id));
+        toast({
+          title: 'Workflow Deleted',
+          description: `"${deletingWorkflow.name}" has been removed.`,
+        });
+      } catch (err) {
+        console.error('Error deleting workflow:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to delete workflow',
+          variant: 'destructive',
+        });
+      } finally {
+        setDeletingWorkflow(null);
+      }
     }
   };
 
-  const handleDuplicate = (workflow: Workflow) => {
-    const newWorkflow: Workflow = {
-      ...workflow,
-      id: Date.now().toString(),
-      name: `${workflow.name} (Copy)`,
-      status: 'inactive',
-    };
-    setWorkflows([...workflows, newWorkflow]);
-    toast({
-      title: 'Workflow Duplicated',
-      description: `"${newWorkflow.name}" has been created.`,
-    });
+  const handleDuplicate = async (workflow: Workflow) => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await (supabase
+        .from('workflows' as any)
+        .insert({
+          company_id: companyId,
+          name: `${workflow.name} (Copy)`,
+          description: workflow.description,
+          trigger_type: workflow.triggerType,
+          trigger_source: workflow.triggerSource,
+          status: 'inactive',
+          tools: workflow.tools,
+          actions: workflow.actions,
+          webhook_url: workflow.webhookUrl,
+          ai_agent_id: workflow.aiAgentId,
+          vapi_assistant_id: workflow.vapiAssistantId,
+          vapi_phone_number_id: workflow.vapiPhoneNumberId,
+        })
+        .select()
+        .single() as any);
+
+      if (error) throw error;
+
+      if (data) {
+        setWorkflows([dbRowToWorkflow(data), ...workflows]);
+        toast({
+          title: 'Workflow Duplicated',
+          description: `"${data.name}" has been created.`,
+        });
+      }
+    } catch (err) {
+      console.error('Error duplicating workflow:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to duplicate workflow',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleToggleStatus = (workflow: Workflow) => {
-    setWorkflows(workflows.map((w) =>
-      w.id === workflow.id
-        ? { ...w, status: w.status === 'active' ? 'inactive' : 'active' }
-        : w
-    ));
-    toast({
-      title: workflow.status === 'active' ? 'Workflow Disabled' : 'Workflow Enabled',
-      description: `"${workflow.name}" is now ${workflow.status === 'active' ? 'inactive' : 'active'}.`,
-    });
-  };
+  const handleToggleStatus = async (workflow: Workflow) => {
+    const newStatus = workflow.status === 'active' ? 'inactive' : 'active';
 
-  const handleSave = (workflowData: Partial<Workflow>) => {
-    if (editingWorkflow) {
+    try {
+      const { error } = await (supabase
+        .from('workflows' as any)
+        .update({ status: newStatus })
+        .eq('id', workflow.id) as any);
+
+      if (error) throw error;
+
       setWorkflows(workflows.map((w) =>
-        w.id === editingWorkflow.id ? { ...w, ...workflowData, updatedAt: new Date().toISOString() } : w
+        w.id === workflow.id ? { ...w, status: newStatus } : w
       ));
       toast({
-        title: 'Workflow Updated',
-        description: `"${workflowData.name}" has been updated.`,
+        title: workflow.status === 'active' ? 'Workflow Disabled' : 'Workflow Enabled',
+        description: `"${workflow.name}" is now ${newStatus}.`,
       });
-    } else {
-      const newWorkflow: Workflow = {
-        id: Date.now().toString(),
-        name: workflowData.name || 'New Workflow',
-        description: workflowData.description || '',
-        triggerType: workflowData.triggerType || 'temporal-outbound',
-        triggerSource: workflowData.triggerSource || 'manual',
-        status: workflowData.status || 'inactive',
-        tools: workflowData.tools || [],
-        actions: workflowData.actions || [],
-        updatedAt: new Date().toISOString(),
-      };
-      setWorkflows([...workflows, newWorkflow]);
+    } catch (err) {
+      console.error('Error toggling workflow status:', err);
       toast({
-        title: 'Workflow Created',
-        description: `"${newWorkflow.name}" has been created.`,
+        title: 'Error',
+        description: 'Failed to update workflow status',
+        variant: 'destructive',
       });
     }
-    setIsFormOpen(false);
-    setEditingWorkflow(null);
+  };
+
+  const handleSave = async (workflowData: Partial<Workflow>) => {
+    if (!companyId) {
+      toast({
+        title: 'Error',
+        description: 'Company not found. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      if (editingWorkflow) {
+        // Update existing workflow
+        const { data, error } = await (supabase
+          .from('workflows' as any)
+          .update({
+            name: workflowData.name,
+            description: workflowData.description,
+            trigger_type: workflowData.triggerType,
+            trigger_source: workflowData.triggerSource,
+            status: workflowData.status,
+            tools: workflowData.tools,
+            actions: workflowData.actions,
+            webhook_url: workflowData.webhookUrl,
+            ai_agent_id: workflowData.aiAgentId,
+            vapi_assistant_id: workflowData.vapiAssistantId,
+            vapi_phone_number_id: workflowData.vapiPhoneNumberId,
+          })
+          .eq('id', editingWorkflow.id)
+          .select()
+          .single() as any);
+
+        if (error) throw error;
+
+        if (data) {
+          setWorkflows(workflows.map((w) =>
+            w.id === editingWorkflow.id ? dbRowToWorkflow(data) : w
+          ));
+          toast({
+            title: 'Workflow Updated',
+            description: `"${workflowData.name}" has been updated.`,
+          });
+        }
+      } else {
+        // Create new workflow
+        const { data, error } = await (supabase
+          .from('workflows' as any)
+          .insert({
+            company_id: companyId,
+            name: workflowData.name || 'New Workflow',
+            description: workflowData.description || '',
+            trigger_type: workflowData.triggerType || 'temporal-outbound',
+            trigger_source: workflowData.triggerSource || 'manual',
+            status: workflowData.status || 'inactive',
+            tools: workflowData.tools || [],
+            actions: workflowData.actions || [],
+            webhook_url: workflowData.webhookUrl,
+            ai_agent_id: workflowData.aiAgentId,
+            vapi_assistant_id: workflowData.vapiAssistantId,
+            vapi_phone_number_id: workflowData.vapiPhoneNumberId,
+          })
+          .select()
+          .single() as any);
+
+        if (error) throw error;
+
+        if (data) {
+          setWorkflows([dbRowToWorkflow(data), ...workflows]);
+          toast({
+            title: 'Workflow Created',
+            description: `"${data.name}" has been created.`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error saving workflow:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to save workflow',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFormOpen(false);
+      setEditingWorkflow(null);
+    }
   };
 
   const formatDate = (dateStr: string) => {

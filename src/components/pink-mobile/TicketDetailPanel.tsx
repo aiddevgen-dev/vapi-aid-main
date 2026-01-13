@@ -72,13 +72,13 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
   if (!selectedSession) {
     return (
       <Card className="h-full flex flex-col bg-card border-border">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <CardTitle className="text-base">Ticket Detail</CardTitle>
+        <CardHeader className="pb-2 lg:pb-3 pt-2 lg:pt-3 px-2 lg:px-4 flex-shrink-0">
+          <CardTitle className="text-sm lg:text-base">Call Details</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-sm">Select a call to view details</p>
+            <FileText className="h-8 w-8 lg:h-12 lg:w-12 mx-auto mb-2 lg:mb-3 opacity-50" />
+            <p className="text-[10px] lg:text-sm">Select a call to view details</p>
           </div>
         </CardContent>
       </Card>
@@ -99,12 +99,12 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
 
   return (
     <Card className="h-full flex flex-col bg-card border-border">
-      <CardHeader className="pb-3 flex-shrink-0 border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Call Details</CardTitle>
+      <CardHeader className="pb-2 lg:pb-3 pt-2 lg:pt-3 px-2 lg:px-4 flex-shrink-0 border-b">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm lg:text-base">Call Details</CardTitle>
           <Badge
             variant="outline"
-            className={`font-mono text-xs ${isActive ? 'bg-green-500/20 text-green-600 border-green-500/50' : ''}`}
+            className={`font-mono text-[9px] lg:text-xs px-1 lg:px-1.5 ${isActive ? 'bg-green-500/20 text-green-600 border-green-500/50' : ''}`}
           >
             {selectedSession.ticket_id}
           </Badge>
@@ -112,84 +112,84 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
         <ScrollArea className="h-full">
-          <div className="p-4 space-y-4">
+          <div className="p-2 lg:p-4 space-y-2 lg:space-y-4">
             {/* Lead Info */}
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`p-2 rounded-full ${isInbound ? 'bg-blue-500/20' : 'bg-pink-500/20'}`}>
+            <div className="p-2 lg:p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-2 lg:gap-3 mb-2 lg:mb-3">
+                <div className={`p-1.5 lg:p-2 rounded-full flex-shrink-0 ${isInbound ? 'bg-blue-500/20' : 'bg-pink-500/20'}`}>
                   {isInbound ? (
-                    <PhoneIncoming className="h-4 w-4 text-blue-600" />
+                    <PhoneIncoming className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
                   ) : (
-                    <PhoneOutgoing className="h-4 w-4 text-pink-600" />
+                    <PhoneOutgoing className="h-3 w-3 lg:h-4 lg:w-4 text-pink-600" />
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold font-mono">{selectedSession.customer_phone}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 lg:gap-2">
+                    <p className="font-semibold font-mono text-[10px] lg:text-sm truncate">{selectedSession.customer_phone}</p>
                     {isActive && (
-                      <Badge className="text-[10px] bg-green-500 text-white animate-pulse">LIVE</Badge>
+                      <Badge className="text-[8px] lg:text-[10px] bg-green-500 text-white animate-pulse px-1">LIVE</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {isInbound ? 'Inbound' : 'Outbound'} Call
+                  <p className="text-[9px] lg:text-xs text-muted-foreground">
+                    {isInbound ? 'Inbound' : 'Outbound'}
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-1 lg:gap-2 text-[9px] lg:text-xs">
                 <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span>Started: {new Date(selectedSession.started_at).toLocaleTimeString()}</span>
+                  <Clock className="h-2.5 w-2.5 lg:h-3 lg:w-3 text-muted-foreground flex-shrink-0" />
+                  <span className="truncate">{new Date(selectedSession.started_at).toLocaleTimeString()}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span>Duration: {formatDuration(selectedSession.started_at, selectedSession.ended_at)}</span>
+                  <Clock className="h-2.5 w-2.5 lg:h-3 lg:w-3 text-muted-foreground flex-shrink-0" />
+                  <span>{formatDuration(selectedSession.started_at, selectedSession.ended_at)}</span>
                 </div>
               </div>
             </div>
 
             {/* Call Outcome */}
-            <div className={`p-3 rounded-lg border ${
+            <div className={`p-2 lg:p-3 rounded-lg border ${
               isActive
                 ? 'bg-green-500/10 border-green-500/30'
                 : 'bg-blue-500/10 border-blue-500/30'
             }`}>
-              <h4 className={`text-xs font-semibold uppercase tracking-wide mb-1 flex items-center gap-2 ${
+              <h4 className={`text-[9px] lg:text-xs font-semibold uppercase tracking-wide mb-0.5 lg:mb-1 flex items-center gap-1 lg:gap-2 ${
                 isActive ? 'text-green-600' : 'text-blue-600'
               }`}>
                 {isActive ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin" />
                 ) : (
-                  <CheckCircle className="h-3 w-3" />
+                  <CheckCircle className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
                 )}
                 Outcome
               </h4>
-              <p className={`text-sm font-medium ${isActive ? 'text-green-600' : 'text-blue-600'}`}>
+              <p className={`text-[10px] lg:text-sm font-medium ${isActive ? 'text-green-600' : 'text-blue-600'}`}>
                 {isActive
-                  ? 'Call in Progress - Sara AI handling'
-                  : 'Call Completed by AI'}
+                  ? 'In Progress - Sara AI'
+                  : 'Completed by AI'}
               </p>
             </div>
 
             {/* Transcript */}
             <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                <MessageSquare className="h-3 w-3" />
-                Transcript {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+              <h4 className="text-[9px] lg:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 lg:mb-2 flex items-center gap-1 lg:gap-2">
+                <MessageSquare className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                Transcript {loading && <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin" />}
               </h4>
               {transcripts.length > 0 ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-1.5 lg:space-y-2 max-h-32 lg:max-h-48 overflow-y-auto">
                   {transcripts.map((t) => (
                     <div
                       key={t.id}
-                      className={`p-2 rounded text-xs ${
+                      className={`p-1.5 lg:p-2 rounded text-[9px] lg:text-xs ${
                         t.speaker === 'agent'
-                          ? 'bg-pink-500/10 border border-pink-500/20 ml-4'
-                          : 'bg-muted/50 border border-border mr-4'
+                          ? 'bg-pink-500/10 border border-pink-500/20 ml-2 lg:ml-4'
+                          : 'bg-muted/50 border border-border mr-2 lg:mr-4'
                       }`}
                     >
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className={`font-semibold ${t.speaker === 'agent' ? 'text-pink-600' : 'text-foreground'}`}>
-                          {t.speaker === 'agent' ? 'Sara AI' : 'Customer'}
+                      <div className="flex items-center gap-1 mb-0.5 lg:mb-1">
+                        <span className={`font-semibold text-[9px] lg:text-xs ${t.speaker === 'agent' ? 'text-pink-600' : 'text-foreground'}`}>
+                          {t.speaker === 'agent' ? 'Sara' : 'Customer'}
                         </span>
                       </div>
                       <p className="text-foreground">{t.text}</p>
@@ -197,23 +197,23 @@ export const TicketDetailPanel = ({ selectedSession }: TicketDetailPanelProps) =
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground text-xs border border-dashed border-border rounded">
-                  {isActive ? 'Transcript will appear after call ends' : 'No transcript available'}
+                <div className="text-center py-3 lg:py-4 text-muted-foreground text-[9px] lg:text-xs border border-dashed border-border rounded">
+                  {isActive ? 'Transcript after call' : 'No transcript'}
                 </div>
               )}
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 rounded bg-muted/30 border border-border text-center">
-                <p className="text-lg font-bold text-foreground">{transcripts.length}</p>
-                <p className="text-[10px] text-muted-foreground">Messages</p>
+            <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
+              <div className="p-1.5 lg:p-2 rounded bg-muted/30 border border-border text-center">
+                <p className="text-sm lg:text-lg font-bold text-foreground">{transcripts.length}</p>
+                <p className="text-[8px] lg:text-[10px] text-muted-foreground">Messages</p>
               </div>
-              <div className="p-2 rounded bg-muted/30 border border-border text-center">
-                <p className="text-lg font-bold text-foreground">
+              <div className="p-1.5 lg:p-2 rounded bg-muted/30 border border-border text-center">
+                <p className="text-sm lg:text-lg font-bold text-foreground">
                   {transcripts.filter(t => t.speaker === 'agent').length}
                 </p>
-                <p className="text-[10px] text-muted-foreground">AI Responses</p>
+                <p className="text-[8px] lg:text-[10px] text-muted-foreground">AI Resp</p>
               </div>
             </div>
           </div>

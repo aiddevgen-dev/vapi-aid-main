@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,8 +21,13 @@ import {
   Shield,
   Clock,
   Zap,
+  Edit,
+  Save,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 // Transfer Configuration
 const TRANSFER_CONFIG = {
@@ -32,8 +37,8 @@ const TRANSFER_CONFIG = {
   transferEndpoint: 'vapi-pink-transfer',
 };
 
-// AI Suggestions Prompt used during calls
-const AI_SUGGESTIONS_PROMPT = `You are an AI assistant helping human agents during live customer calls for Pink Mobile.
+// Default AI Suggestions Prompt used during calls
+const DEFAULT_AI_SUGGESTIONS_PROMPT = `You are an AI assistant helping human agents during live customer calls for Pink Mobile.
 
 When a call is transferred from Sara AI to a human agent, provide real-time suggestions based on:
 1. The customer's issue and call history
@@ -88,6 +93,84 @@ const TRANSFER_TOOL = {
 export const HumanAgentsList: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const { toast } = useToast();
+
+  // AI Suggestions Prompt editing state
+  const [aiPrompt, setAiPrompt] = useState(DEFAULT_AI_SUGGESTIONS_PROMPT);
+  const [editablePrompt, setEditablePrompt] = useState(DEFAULT_AI_SUGGESTIONS_PROMPT);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  // Load AI Suggestions Prompt from database
+  const loadAiPrompt = async () => {
+    setIsLoadingPrompt(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get company for current user
+      const { data: companyData } = await supabase
+        .from('companies')
+        .select('id, ai_suggestion_prompt' as any)
+        .eq('user_id', user.id)
+        .single();
+
+      if (companyData) {
+        setCompanyId(companyData.id);
+        const prompt = (companyData as any).ai_suggestion_prompt || DEFAULT_AI_SUGGESTIONS_PROMPT;
+        setAiPrompt(prompt);
+        setEditablePrompt(prompt);
+      }
+    } catch (error) {
+      console.error('Error loading AI prompt:', error);
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  };
+
+  // Save AI Suggestions Prompt to database
+  const saveAiPrompt = async () => {
+    if (!companyId) {
+      toast({
+        title: 'Error',
+        description: 'Company not found. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingPrompt(true);
+    try {
+      const { error } = await (supabase
+        .from('companies' as any)
+        .update({ ai_suggestion_prompt: editablePrompt } as any)
+        .eq('id', companyId) as any);
+
+      if (error) throw error;
+
+      setAiPrompt(editablePrompt);
+      setIsEditingPrompt(false);
+      toast({
+        title: 'Prompt Saved!',
+        description: 'AI Suggestions prompt has been updated successfully.',
+      });
+    } catch (error) {
+      console.error('Error saving AI prompt:', error);
+      toast({
+        title: 'Save Failed',
+        description: 'Failed to save the prompt. Make sure the ai_suggestion_prompt column exists in the companies table.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
+
+  // Load prompt on mount
+  useEffect(() => {
+    loadAiPrompt();
+  }, []);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -160,7 +243,7 @@ export const HumanAgentsList: React.FC = () => {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview" className="gap-1 text-xs">
             <Headphones className="h-4 w-4" />
             Overview
@@ -173,10 +256,10 @@ export const HumanAgentsList: React.FC = () => {
             <Sparkles className="h-4 w-4" />
             AI Suggestions
           </TabsTrigger>
-          <TabsTrigger value="tool" className="gap-1 text-xs">
+          {/* <TabsTrigger value="tool" className="gap-1 text-xs">
             <Settings className="h-4 w-4" />
             VAPI Tool
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         {/* Overview Tab */}
@@ -328,31 +411,103 @@ export const HumanAgentsList: React.FC = () => {
         <TabsContent value="ai-prompt" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-blue-500" />
-                AI Suggestions Prompt
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-blue-500" />
+                  AI Suggestions Prompt
+                  {isEditingPrompt && (
+                    <Badge variant="outline" className="text-orange-500 border-orange-500/50 text-[10px]">
+                      Editing
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {isEditingPrompt ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditablePrompt(aiPrompt);
+                          setIsEditingPrompt(false);
+                        }}
+                        disabled={isSavingPrompt}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={saveAiPrompt}
+                        disabled={isSavingPrompt}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {isSavingPrompt ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(aiPrompt, 'AI Prompt')}
+                        className="gap-2"
+                        disabled={isLoadingPrompt}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditingPrompt(true)}
+                        className="gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10"
+                        disabled={isLoadingPrompt}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit Prompt
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardTitle>
               <CardDescription>
                 This prompt powers real-time AI assistance for human agents during calls
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(AI_SUGGESTIONS_PROMPT, 'AI Prompt')}
-                  className="gap-2"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy Prompt
-                </Button>
-              </div>
-              <ScrollArea className="h-[400px] rounded-lg border bg-muted/30 p-4">
-                <pre className="text-sm whitespace-pre-wrap font-mono">
-                  {AI_SUGGESTIONS_PROMPT}
-                </pre>
-              </ScrollArea>
+              {isEditingPrompt ? (
+                <Textarea
+                  value={editablePrompt}
+                  onChange={(e) => setEditablePrompt(e.target.value)}
+                  className="min-h-[400px] font-mono text-sm resize-y"
+                  placeholder="Enter AI suggestions prompt..."
+                  disabled={isSavingPrompt}
+                />
+              ) : isLoadingPrompt ? (
+                <div className="h-[400px] flex items-center justify-center rounded-lg border bg-muted/30">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Loading prompt...</p>
+                  </div>
+                </div>
+              ) : (
+                <ScrollArea className="h-[400px] rounded-lg border bg-muted/30 p-4">
+                  <pre className="text-sm whitespace-pre-wrap font-mono">
+                    {aiPrompt}
+                  </pre>
+                </ScrollArea>
+              )}
 
               <div className="p-4 rounded-lg border border-blue-500/30 bg-blue-500/5">
                 <h4 className="font-semibold mb-2 text-blue-600">How It Works</h4>

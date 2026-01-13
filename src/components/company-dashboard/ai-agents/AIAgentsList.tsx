@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, Bot, Filter, Phone, Mic, Wrench, CheckCircle, ExternalLink, Copy, Eye, BarChart3 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Search, Bot, Filter, Phone, Mic, Wrench, CheckCircle, ExternalLink, Copy, Eye, BarChart3, Loader2, Save, Edit, RotateCcw } from 'lucide-react';
 import { AIAgentCard, AIAgent } from './AIAgentCard';
 import { CreateEditAIAgent } from './CreateEditAIAgent';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -190,8 +191,119 @@ export const AIAgentsList: React.FC = () => {
     avgDuration: number;
     successRate: number;
   } | null>(null);
+
+  // System prompt editing state (Sara AI)
+  const [editableSystemPrompt, setEditableSystemPrompt] = useState(SARA_AI_CONFIG.systemPrompt);
+  const [currentSystemPrompt, setCurrentSystemPrompt] = useState(SARA_AI_CONFIG.systemPrompt);
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // VAPI API credentials
+  const VAPI_PRIVATE_KEY = '51224b33-c96c-4ec6-8680-b829f52a4404';
+  const VAPI_ASSISTANT_ID = '805978f7-ce8b-44f5-9147-16a90280022b';
+
+  // Function to fetch current system prompt from VAPI
+  const fetchVapiSystemPrompt = async () => {
+    setIsLoadingPrompt(true);
+    try {
+      const response = await fetch(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch assistant');
+      }
+
+      const data = await response.json();
+      console.log('VAPI Assistant fetched:', data);
+
+      // Extract system prompt from the response
+      // VAPI stores it in model.messages[0].content where role is 'system'
+      let systemPrompt = SARA_AI_CONFIG.systemPrompt; // fallback
+
+      if (data.model?.messages) {
+        const systemMessage = data.model.messages.find((m: any) => m.role === 'system');
+        if (systemMessage?.content) {
+          systemPrompt = systemMessage.content;
+        }
+      }
+
+      setCurrentSystemPrompt(systemPrompt);
+      setEditableSystemPrompt(systemPrompt);
+    } catch (error) {
+      console.error('Error fetching VAPI assistant:', error);
+      // Keep the default prompt on error
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  };
+
+  // Fetch system prompt when Sara AI modal opens
+  useEffect(() => {
+    if (viewingSaraAI) {
+      fetchVapiSystemPrompt();
+    }
+  }, [viewingSaraAI]);
+
+  // Function to update VAPI assistant system prompt
+  const updateVapiSystemPrompt = async (newPrompt: string) => {
+    setIsSavingPrompt(true);
+    try {
+      const response = await fetch(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: {
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: newPrompt
+              }
+            ]
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update assistant');
+      }
+
+      const data = await response.json();
+      console.log('VAPI Assistant updated:', data);
+
+      toast({
+        title: 'System Prompt Updated!',
+        description: 'Sara AI system prompt has been updated successfully in VAPI.',
+      });
+
+      setIsEditingPrompt(false);
+      // Update the local state to reflect the change
+      setCurrentSystemPrompt(newPrompt);
+    } catch (error) {
+      console.error('Error updating VAPI assistant:', error);
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update system prompt',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  };
 
   // Fetch real call stats for Sara AI from database
   useEffect(() => {
@@ -631,26 +743,105 @@ export const AIAgentsList: React.FC = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center justify-between">
-                    <span>System Prompt</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(SARA_AI_CONFIG.systemPrompt);
-                        toast({ title: 'Copied!', description: 'System prompt copied to clipboard' });
-                      }}
-                    >
-                      <Copy className="h-4 w-4 mr-1" />
-                      Copy
-                    </Button>
+                    <span className="flex items-center gap-2">
+                      System Prompt
+                      {isEditingPrompt && (
+                        <Badge variant="outline" className="text-orange-500 border-orange-500/50 text-[10px]">
+                          Editing
+                        </Badge>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isEditingPrompt ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditableSystemPrompt(currentSystemPrompt);
+                              setIsEditingPrompt(false);
+                            }}
+                            disabled={isSavingPrompt}
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => updateVapiSystemPrompt(editableSystemPrompt)}
+                            disabled={isSavingPrompt}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            {isSavingPrompt ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-4 w-4 mr-1" />
+                                Save to VAPI
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(currentSystemPrompt);
+                              toast({ title: 'Copied!', description: 'System prompt copied to clipboard' });
+                            }}
+                            disabled={isLoadingPrompt}
+                          >
+                            <Copy className="h-4 w-4 mr-1" />
+                            Copy
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsEditingPrompt(true)}
+                            className="border-pink-500/50 text-pink-600 hover:bg-pink-500/10"
+                            disabled={isLoadingPrompt}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    <pre className="text-sm whitespace-pre-wrap font-mono bg-muted/50 p-4 rounded-lg">
-                      {SARA_AI_CONFIG.systemPrompt}
-                    </pre>
-                  </ScrollArea>
+                  {isEditingPrompt ? (
+                    <Textarea
+                      value={editableSystemPrompt}
+                      onChange={(e) => setEditableSystemPrompt(e.target.value)}
+                      className="min-h-[300px] font-mono text-sm resize-y"
+                      placeholder="Enter system prompt..."
+                      disabled={isSavingPrompt}
+                    />
+                  ) : isLoadingPrompt ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="text-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-pink-500 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">Loading system prompt from VAPI...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[300px]">
+                      <pre className="text-sm whitespace-pre-wrap font-mono bg-muted/50 p-4 rounded-lg">
+                        {currentSystemPrompt}
+                      </pre>
+                    </ScrollArea>
+                  )}
+                  {isEditingPrompt && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Changes will be saved directly to VAPI and will take effect on the next call.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

@@ -195,83 +195,84 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
 
   return (
     <Card className="h-full flex flex-col bg-card border-border">
-      <CardHeader className="pb-3 flex-shrink-0">
-        <CardTitle className="text-base flex items-center justify-between">
+      <CardHeader className="pb-2 lg:pb-3 pt-2 lg:pt-3 px-2 lg:px-4 flex-shrink-0">
+        <CardTitle className="text-sm lg:text-base flex items-center justify-between">
           <span>Live Calls</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 lg:gap-2">
             {activeCalls.length > 0 && (
-              <Badge className="text-[10px] bg-green-500 text-white animate-pulse">
+              <Badge className="text-[9px] lg:text-[10px] bg-green-500 text-white animate-pulse px-1 lg:px-1.5">
                 {activeCalls.length} Active
               </Badge>
             )}
           </div>
         </CardTitle>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{totalCount} total calls ({completedCalls.length} shown)</span>
-          <span className="text-[10px]">Updated {formatTime(lastUpdate.toISOString())}</span>
+        <div className="flex items-center justify-between text-[10px] lg:text-xs text-muted-foreground">
+          <span>{totalCount} total ({completedCalls.length} shown)</span>
+          <span className="text-[9px] lg:text-[10px]">{formatTime(lastUpdate.toISOString())}</span>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-4 pb-4">
+        <ScrollArea className="h-full px-2 lg:px-4 pb-2 lg:pb-4">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-6 lg:py-8">
+              <Loader2 className="h-5 w-5 lg:h-6 lg:w-6 animate-spin text-muted-foreground" />
             </div>
           ) : calls.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center py-6 lg:py-8 text-muted-foreground text-[10px] lg:text-sm">
               No calls yet. Make an outbound call or receive an inbound call.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5 lg:space-y-2">
               {/* Active Calls First */}
               {activeCalls.map((call) => (
                 <div
                   key={call.id}
                   onClick={() => onSelectSession(callToSession(call))}
-                  className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                  className={`p-2 lg:p-3 rounded-lg border-2 cursor-pointer transition-all ${
                     selectedSessionId === call.id
                       ? 'border-pink-500 bg-pink-500/10'
                       : 'border-green-500 bg-green-500/10 animate-pulse'
                   }`}
                 >
                   {/* Header Row */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-full ${
+                  <div className="flex items-center justify-between mb-1 lg:mb-2">
+                    <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
+                      <div className={`p-1 lg:p-1.5 rounded-full flex-shrink-0 ${
                         call.call_direction === 'inbound'
                           ? 'bg-blue-500/20 text-blue-500'
                           : 'bg-pink-500/20 text-pink-500'
                       }`}>
                         {call.call_direction === 'inbound'
-                          ? <PhoneIncoming className="h-3 w-3" />
-                          : <PhoneOutgoing className="h-3 w-3" />
+                          ? <PhoneIncoming className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                          : <PhoneOutgoing className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
                         }
                       </div>
-                      <span className="font-medium text-sm font-mono">{call.customer_number}</span>
+                      <span className="font-medium text-[10px] lg:text-sm font-mono truncate">{call.customer_number}</span>
                     </div>
-                    <Badge className="text-[10px] bg-green-500 text-white">
+                    <Badge className="text-[8px] lg:text-[10px] bg-green-500 text-white px-1 lg:px-1.5 flex-shrink-0">
                       LIVE
                     </Badge>
                   </div>
 
                   {/* Call Info */}
-                  <div className="text-xs text-muted-foreground mb-1">
-                    {call.call_direction === 'inbound' ? 'Inbound' : 'Outbound'} call via Sara AI
+                  <div className="text-[9px] lg:text-xs text-muted-foreground mb-0.5 lg:mb-1">
+                    {call.call_direction === 'inbound' ? 'In' : 'Out'} via Sara AI
                   </div>
 
                   {/* Live Duration */}
-                  <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                    <Clock className="h-3 w-3 animate-pulse" />
+                  <div className="flex items-center gap-1 text-[9px] lg:text-xs text-green-600 font-medium">
+                    <Clock className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-pulse" />
                     {formatDuration(call.started_at)} (live)
                   </div>
 
                   {/* Status indicator */}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-1 text-[10px] text-green-600">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>Sara handling call...</span>
+                  <div className="flex items-center justify-between mt-1.5 lg:mt-2 pt-1.5 lg:pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-1 text-[8px] lg:text-[10px] text-green-600">
+                      <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin" />
+                      <span className="hidden lg:inline">Sara handling call...</span>
+                      <span className="lg:hidden">Sara AI...</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[8px] lg:text-[10px] text-muted-foreground">
                       {formatTime(call.started_at)}
                     </span>
                   </div>
@@ -283,62 +284,62 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
                 <div
                   key={call.id}
                   onClick={() => onSelectSession(callToSession(call))}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                  className={`p-2 lg:p-3 rounded-lg border cursor-pointer transition-all ${
                     selectedSessionId === call.id
                       ? 'border-pink-500 bg-pink-500/10'
                       : 'border-border bg-muted/30 hover:bg-muted/50 hover:border-muted-foreground/30'
                   }`}
                 >
                   {/* Header Row */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-full ${
+                  <div className="flex items-center justify-between mb-1 lg:mb-2">
+                    <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
+                      <div className={`p-1 lg:p-1.5 rounded-full flex-shrink-0 ${
                         call.call_direction === 'inbound'
                           ? 'bg-blue-500/20 text-blue-500'
                           : 'bg-pink-500/20 text-pink-500'
                       }`}>
                         {call.call_direction === 'inbound'
-                          ? <PhoneIncoming className="h-3 w-3" />
-                          : <PhoneOutgoing className="h-3 w-3" />
+                          ? <PhoneIncoming className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                          : <PhoneOutgoing className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
                         }
                       </div>
-                      <span className="font-medium text-sm font-mono">{call.customer_number}</span>
+                      <span className="font-medium text-[10px] lg:text-sm font-mono truncate">{call.customer_number}</span>
                     </div>
-                    <Badge className="text-[10px] bg-gray-500/20 text-gray-600 border-gray-500/30">
+                    <Badge className="text-[8px] lg:text-[10px] bg-gray-500/20 text-gray-600 border-gray-500/30 px-1 flex-shrink-0">
                       {call.call_status}
                     </Badge>
                   </div>
 
                   {/* Call Info */}
-                  <div className="text-xs text-muted-foreground mb-1">
-                    {call.call_direction === 'inbound' ? 'Inbound' : 'Outbound'} call
+                  <div className="text-[9px] lg:text-xs text-muted-foreground mb-0.5 lg:mb-1">
+                    {call.call_direction === 'inbound' ? 'Inbound' : 'Outbound'}
                   </div>
 
                   {/* Duration */}
                   {call.ended_at && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      Duration: {formatDuration(call.started_at, call.ended_at)}
+                    <div className="flex items-center gap-1 text-[9px] lg:text-xs text-muted-foreground">
+                      <Clock className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                      {formatDuration(call.started_at, call.ended_at)}
                     </div>
                   )}
 
                   {/* Status indicator */}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                      <span>Completed</span>
+                  <div className="flex items-center justify-between mt-1.5 lg:mt-2 pt-1.5 lg:pt-2 border-t border-border/50">
+                    <div className="flex items-center gap-1 text-[8px] lg:text-[10px] text-muted-foreground">
+                      <CheckCircle className="h-2.5 w-2.5 lg:h-3 lg:w-3 text-green-500" />
+                      <span>Done</span>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-[10px] text-primary hover:bg-primary/10"
+                      className="h-5 lg:h-6 px-1.5 lg:px-2 text-[8px] lg:text-[10px] text-primary hover:bg-primary/10"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleViewTranscript(call);
                       }}
                     >
-                      <FileText className="h-3 w-3 mr-1" />
-                      Transcript
+                      <FileText className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+                      <span className="hidden lg:inline ml-1">Transcript</span>
                     </Button>
                   </div>
                 </div>
@@ -351,17 +352,17 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
                   size="sm"
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="w-full mt-2"
+                  className="w-full mt-1 lg:mt-2 h-7 lg:h-8 text-[10px] lg:text-xs"
                 >
                   {loadingMore ? (
                     <>
-                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                      <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 mr-1 lg:mr-2 animate-spin" />
                       Loading...
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="h-3 w-3 mr-2" />
-                      Load More ({totalCount - completedCalls.length} remaining)
+                      <ChevronDown className="h-2.5 w-2.5 lg:h-3 lg:w-3 mr-1 lg:mr-2" />
+                      More ({totalCount - completedCalls.length})
                     </>
                   )}
                 </Button>

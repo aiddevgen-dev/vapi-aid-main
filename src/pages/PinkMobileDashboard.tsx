@@ -330,39 +330,39 @@ export const PinkMobileDashboard = () => {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="h-14 flex items-center justify-between px-6 border-b bg-background z-20 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center">
-              <Phone className="h-5 w-5 text-white" />
+      <header className="h-14 flex items-center justify-between px-3 lg:px-6 border-b bg-background z-20 flex-shrink-0">
+        <div className="flex items-center gap-2 lg:gap-4">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center flex-shrink-0">
+              <Phone className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-foreground">PINK Mobile</h1>
-              <span className="text-xs text-muted-foreground">Sara AI Operations</span>
+              <h1 className="text-base lg:text-xl font-bold text-foreground">PINK Mobile</h1>
+              <span className="text-[10px] lg:text-xs text-muted-foreground hidden sm:block">Sara AI Operations</span>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs border-pink-500/50 text-pink-600 bg-pink-500/10">
-            AI-Powered Support
+          <Badge variant="outline" className="text-[10px] lg:text-xs border-pink-500/50 text-pink-600 bg-pink-500/10 hidden md:flex">
+            AI-Powered
           </Badge>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 lg:gap-4">
           {/* Contact Centre Button */}
           <Button
             variant="outline"
             size="sm"
             onClick={handleOpenContactCentre}
-            className="flex items-center gap-2 border-primary/50 hover:bg-primary/10"
+            className="flex items-center gap-1 lg:gap-2 border-primary/50 hover:bg-primary/10 px-2 lg:px-3 h-8"
           >
             <Headphones className="h-4 w-4" />
-            Contact Centre
+            <span className="hidden sm:inline">Contact Centre</span>
           </Button>
 
           {/* User Info and Logout */}
-          <div className="flex items-center gap-3 pl-4 border-l border-border">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/10 border border-pink-500/30 rounded-lg">
-              <User className="h-4 w-4 text-pink-600" />
-              <span className="text-sm font-medium text-foreground">
+          <div className="flex items-center gap-2 lg:gap-3 pl-2 lg:pl-4 border-l border-border">
+            <div className="flex items-center gap-1 lg:gap-2 px-2 lg:px-3 py-1.5 bg-pink-500/10 border border-pink-500/30 rounded-lg">
+              <User className="h-4 w-4 text-pink-600 flex-shrink-0" />
+              <span className="text-xs lg:text-sm font-medium text-foreground max-w-[80px] lg:max-w-none truncate hidden sm:block">
                 {userProfile?.full_name || userProfile?.email || 'Operator'}
               </span>
             </div>
@@ -370,7 +370,7 @@ export const PinkMobileDashboard = () => {
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className="flex items-center gap-2 text-foreground hover:bg-primary/20"
+              className="flex items-center gap-2 text-foreground hover:bg-primary/20 h-8 w-8 p-0"
               title="Sign Out"
             >
               <LogOut className="h-4 w-4" />
@@ -380,23 +380,23 @@ export const PinkMobileDashboard = () => {
       </header>
 
       {/* Main Content - 5 Panels */}
-      <div className="flex-1 min-h-0 p-4">
-        <div className="h-full grid grid-cols-12 gap-3">
+      <div className="flex-1 min-h-0 p-2 lg:p-4 overflow-auto">
+        <div className="h-full min-h-[600px] grid grid-cols-6 xl:grid-cols-12 gap-2 lg:gap-3">
           {/* Panel A: AI Outbound Dialer & Workflows */}
-          <div className="col-span-2 h-full overflow-hidden flex flex-col gap-3">
-            <div className="h-[45%] min-h-0 overflow-hidden">
+          <div className="col-span-3 xl:col-span-2 h-full overflow-hidden flex flex-col gap-2 lg:gap-3 min-h-[400px]">
+            <div className="flex-[45] min-h-0 overflow-hidden">
               <AIOutboundDialer onCallMade={handleCallMade} />
             </div>
-            <div className="h-[25%] min-h-0 overflow-hidden">
+            <div className="flex-[25] min-h-0 overflow-hidden">
               <WorkflowTriggerPanel />
             </div>
-            <div className="h-[30%] min-h-0 overflow-hidden">
+            <div className="flex-[30] min-h-0 overflow-hidden">
               <WorkflowHistoryPanel variant="compact" />
             </div>
           </div>
 
           {/* Panel B: Live Sessions */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-3 xl:col-span-3 h-full overflow-hidden min-h-[400px]">
             <LiveSessionsPanel
               onSelectSession={setSelectedSession}
               selectedSessionId={selectedSession?.id}
@@ -405,17 +405,17 @@ export const PinkMobileDashboard = () => {
           </div>
 
           {/* Panel C: Ticket Detail */}
-          <div className="col-span-3 h-full overflow-hidden">
+          <div className="col-span-3 xl:col-span-3 h-full overflow-hidden min-h-[400px]">
             <TicketDetailPanel selectedSession={selectedSession} />
           </div>
 
           {/* Panel D: Analytics */}
-          <div className="col-span-2 h-full overflow-hidden">
+          <div className="col-span-3 xl:col-span-2 h-full overflow-hidden min-h-[400px]">
             <AIAnalyticsPanel />
           </div>
 
           {/* Panel E: Human Agent Call Panel - Compact box for incoming calls */}
-          <div className="col-span-2 h-full overflow-hidden">
+          <div className="col-span-6 xl:col-span-2 h-full overflow-hidden min-h-[250px] xl:min-h-[400px]">
             <HumanAgentCallPanel
               twilioCall={twilioCall}
               isConnected={isConnected}

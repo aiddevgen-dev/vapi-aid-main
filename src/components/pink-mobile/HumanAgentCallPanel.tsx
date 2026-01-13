@@ -238,10 +238,10 @@ export const HumanAgentCallPanel = ({
   return (
     <>
       <Card className="h-full flex flex-col bg-card border border-green-500/30">
-        <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
-          <CardTitle className="text-sm flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+        <CardHeader className="pb-1 lg:pb-2 pt-2 lg:pt-3 px-2 lg:px-3 flex-shrink-0">
+          <CardTitle className="text-xs lg:text-sm flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
+              <div className={`w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
                 hasActiveCall
                   ? 'bg-gradient-to-br from-green-500 to-green-600'
                   : hasIncomingCall
@@ -249,48 +249,48 @@ export const HumanAgentCallPanel = ({
                     : 'bg-gradient-to-br from-blue-500 to-blue-600'
               }`}>
                 {hasIncomingCall ? (
-                  <PhoneIncoming className="h-3.5 w-3.5 text-white" />
+                  <PhoneIncoming className="h-3 w-3 lg:h-3.5 lg:w-3.5 text-white" />
                 ) : (
-                  <Phone className="h-3.5 w-3.5 text-white" />
+                  <Phone className="h-3 w-3 lg:h-3.5 lg:w-3.5 text-white" />
                 )}
               </div>
-              <span className="font-semibold text-xs">Human Line</span>
+              <span className="font-semibold text-[10px] lg:text-xs truncate">Human Line</span>
             </div>
             {getStatusBadge()}
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="flex-1 overflow-hidden pt-1 pb-3 px-3 flex flex-col">
+        <CardContent className="flex-1 overflow-hidden pt-1 pb-2 lg:pb-3 px-2 lg:px-3 flex flex-col">
           {!isDeviceReady && !isInitializing ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <Phone className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-xs font-medium mb-2">Voice Offline</p>
-              <Button onClick={retryConnection} variant="outline" size="sm" className="text-xs h-7">
-                <Phone className="h-3 w-3 mr-1" />
+              <Phone className="h-6 w-6 lg:h-8 lg:w-8 text-muted-foreground mb-1.5 lg:mb-2" />
+              <p className="text-[10px] lg:text-xs font-medium mb-1.5 lg:mb-2">Voice Offline</p>
+              <Button onClick={retryConnection} variant="outline" size="sm" className="text-[10px] lg:text-xs h-6 lg:h-7 px-2">
+                <Phone className="h-2.5 w-2.5 lg:h-3 lg:w-3 mr-1" />
                 Connect
               </Button>
             </div>
           ) : isInitializing ? (
             <div className="flex-1 flex flex-col items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-primary mb-2" />
-              <p className="text-xs text-muted-foreground">Connecting...</p>
+              <Loader2 className="h-5 w-5 lg:h-6 lg:w-6 animate-spin text-primary mb-1.5 lg:mb-2" />
+              <p className="text-[10px] lg:text-xs text-muted-foreground">Connecting...</p>
             </div>
           ) : showCallUI ? (
-            <div className="flex-1 flex flex-col gap-2">
+            <div className="flex-1 flex flex-col gap-1.5 lg:gap-2">
               {/* Caller Info */}
-              <div className="p-2 rounded-lg border bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+              <div className="p-1.5 lg:p-2 rounded-lg border bg-muted/30">
+                <div className="flex items-center gap-1.5 lg:gap-2">
+                  <div className={`w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
                     hasActiveCall ? 'bg-green-500/20' : 'bg-orange-500/20'
                   }`}>
-                    <User className={`h-3.5 w-3.5 ${hasActiveCall ? 'text-green-500' : 'text-orange-500'}`} />
+                    <User className={`h-3 w-3 lg:h-3.5 lg:w-3.5 ${hasActiveCall ? 'text-green-500' : 'text-orange-500'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs truncate">
+                    <p className="font-mono text-[10px] lg:text-xs truncate">
                       {currentCall?.customer_number || 'Unknown'}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {hasActiveCall ? `Connected • ${formatDuration(callDuration)}` : `Ringing • ${formatDuration(ringingDuration)}`}
+                    <p className="text-[9px] lg:text-[10px] text-muted-foreground">
+                      {hasActiveCall ? `${formatDuration(callDuration)}` : `Ringing ${formatDuration(ringingDuration)}`}
                     </p>
                   </div>
                 </div>
@@ -298,9 +298,9 @@ export const HumanAgentCallPanel = ({
 
               {/* Transfer Reason */}
               {currentCall?.notes && (
-                <div className="p-2 rounded-lg border border-pink-500/30 bg-pink-500/5">
-                  <p className="text-[10px] text-muted-foreground">Transfer Reason</p>
-                  <p className="text-xs truncate">{currentCall.notes}</p>
+                <div className="p-1.5 lg:p-2 rounded-lg border border-pink-500/30 bg-pink-500/5">
+                  <p className="text-[9px] lg:text-[10px] text-muted-foreground">Reason</p>
+                  <p className="text-[10px] lg:text-xs truncate">{currentCall.notes}</p>
                 </div>
               )}
 
@@ -308,40 +308,40 @@ export const HumanAgentCallPanel = ({
 
               {/* Call Controls */}
               {hasIncomingCall && !hasActiveCall ? (
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button onClick={handleAnswer} size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs">
-                    <Phone className="mr-1 h-3 w-3" />
-                    Answer
+                <div className="grid grid-cols-2 gap-1 lg:gap-1.5">
+                  <Button onClick={handleAnswer} size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 lg:h-8 text-[10px] lg:text-xs px-1 lg:px-2">
+                    <Phone className="h-3 w-3" />
+                    <span className="hidden xl:inline ml-1">Answer</span>
                   </Button>
-                  <Button onClick={handleReject} size="sm" variant="destructive" className="h-8 text-xs">
-                    <PhoneOff className="mr-1 h-3 w-3" />
-                    Decline
+                  <Button onClick={handleReject} size="sm" variant="destructive" className="h-7 lg:h-8 text-[10px] lg:text-xs px-1 lg:px-2">
+                    <PhoneOff className="h-3 w-3" />
+                    <span className="hidden xl:inline ml-1">Decline</span>
                   </Button>
                 </div>
               ) : hasActiveCall ? (
-                <div className="space-y-1.5">
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Button onClick={toggleMute} variant={isMuted ? 'destructive' : 'secondary'} size="sm" className="h-7 text-xs">
+                <div className="space-y-1 lg:space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1 lg:gap-1.5">
+                    <Button onClick={toggleMute} variant={isMuted ? 'destructive' : 'secondary'} size="sm" className="h-6 lg:h-7 text-[10px] lg:text-xs">
                       {isMuted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
                     </Button>
-                    <Button onClick={toggleHold} variant={isOnHold ? 'destructive' : 'secondary'} size="sm" className="h-7 text-xs">
+                    <Button onClick={toggleHold} variant={isOnHold ? 'destructive' : 'secondary'} size="sm" className="h-6 lg:h-7 text-[10px] lg:text-xs">
                       {isOnHold ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
                     </Button>
                   </div>
-                  <Button onClick={handleEnd} variant="destructive" size="sm" className="w-full h-7 text-xs">
-                    <PhoneOff className="mr-1 h-3 w-3" />
-                    End Call
+                  <Button onClick={handleEnd} variant="destructive" size="sm" className="w-full h-6 lg:h-7 text-[10px] lg:text-xs">
+                    <PhoneOff className="h-3 w-3" />
+                    <span className="ml-1">End</span>
                   </Button>
                 </div>
               ) : null}
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center mb-2 border border-green-500/30">
-                <Phone className="h-5 w-5 text-green-500" />
+              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-green-500/10 flex items-center justify-center mb-1.5 lg:mb-2 border border-green-500/30">
+                <Phone className="h-4 w-4 lg:h-5 lg:w-5 text-green-500" />
               </div>
-              <p className="text-xs font-medium">Ready</p>
-              <p className="text-[10px] text-muted-foreground">Waiting for calls</p>
+              <p className="text-[10px] lg:text-xs font-medium">Ready</p>
+              <p className="text-[9px] lg:text-[10px] text-muted-foreground">Waiting for calls</p>
             </div>
           )}
         </CardContent>
