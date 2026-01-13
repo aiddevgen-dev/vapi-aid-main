@@ -110,6 +110,8 @@ const getTriggerIcon = (type: string) => {
       return <PhoneIncoming className="h-4 w-4" />;
     case 'outbound-call':
       return <PhoneOutgoing className="h-4 w-4" />;
+    case 'temporal-outbound':
+      return <PhoneOutgoing className="h-4 w-4" />;
     case 'chat-message':
       return <MessageSquare className="h-4 w-4" />;
     case 'time-based':
@@ -127,6 +129,8 @@ const getTriggerLabel = (type: string) => {
       return 'Inbound Call';
     case 'outbound-call':
       return 'Outbound Call';
+    case 'temporal-outbound':
+      return 'Temporal VAPI Call';
     case 'chat-message':
       return 'Chat Message';
     case 'time-based':

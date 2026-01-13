@@ -76,6 +76,7 @@ interface WorkflowFormProps {
 const triggerTypes = [
   { id: 'inbound-call', name: 'Inbound Call', icon: <PhoneIncoming className="h-4 w-4" />, description: 'Triggered when a customer calls your business' },
   { id: 'outbound-call', name: 'Outbound Campaign', icon: <PhoneOutgoing className="h-4 w-4" />, description: 'Automated outbound calling campaigns' },
+  { id: 'temporal-outbound', name: 'Temporal VAPI Call', icon: <PhoneOutgoing className="h-4 w-4" />, description: 'Single outbound call via Temporal workflow - enter phone number to initiate' },
   { id: 'chat-message', name: 'Chat / SMS', icon: <MessageSquare className="h-4 w-4" />, description: 'Triggered by incoming chat or SMS messages' },
   { id: 'scheduled', name: 'Scheduled', icon: <Clock className="h-4 w-4" />, description: 'Run on a recurring schedule (daily, weekly, etc.)' },
   { id: 'webhook', name: 'Webhook / API', icon: <Webhook className="h-4 w-4" />, description: 'Triggered by external API calls or webhooks' },
