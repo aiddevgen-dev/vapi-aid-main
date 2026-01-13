@@ -53,6 +53,9 @@ import { CampaignExecutionPanel } from './WorkflowExecutionPanel';
 import { useToast } from '@/hooks/use-toast';
 import { temporalService } from '@/services/temporalService';
 
+// Demo backend URL - always use this ngrok URL
+const DEMO_BACKEND_URL = 'https://reiko-transactional-vanessa.ngrok-free.dev';
+
 // Mock data
 const mockWorkflows: Workflow[] = [
   {
@@ -168,6 +171,19 @@ export const WorkflowsList: React.FC = () => {
     maxConcurrentCalls: 3,
   });
 
+  // Temporal VAPI call state
+  const [isVapiDialogOpen, setIsVapiDialogOpen] = useState(false);
+  const [selectedTemporalWorkflow, setSelectedTemporalWorkflow] = useState<Workflow | null>(null);
+  const [vapiCallConfig, setVapiCallConfig] = useState({
+    phoneNumber: '',
+    customerName: '',
+    campaignId: '',
+    assistantId: '',
+    phoneNumberId: '',
+  });
+  const [activeVapiCallId, setActiveVapiCallId] = useState<string | null>(null);
+  const [vapiCallStatus, setVapiCallStatus] = useState<string | null>(null);
+
   const { toast } = useToast();
 
   const filteredWorkflows = workflows.filter((workflow) =>
@@ -262,6 +278,14 @@ export const WorkflowsList: React.FC = () => {
 
   // Temporal workflow handlers
   const handleRunWorkflow = (workflow: Workflow) => {
+    // Special handling for Temporal Outbound workflows
+    if (workflow.triggerType === 'temporal-outbound') {
+      setSelectedTemporalWorkflow(workflow);
+      setVapiCallConfig({ phoneNumber: '', customerName: '', campaignId: '', assistantId: '', phoneNumberId: '' });
+      setIsVapiDialogOpen(true);
+      return;
+    }
+
     setRunningWorkflow(workflow);
     setCampaignConfig({
       ...campaignConfig,
@@ -311,6 +335,80 @@ export const WorkflowsList: React.FC = () => {
       });
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  // Temporal VAPI call handler
+  const handleStartVapiCall = async () => {
+    if (!vapiCallConfig.phoneNumber) {
+      toast({
+        title: 'Phone Number Required',
+        description: 'Please enter a phone number to call',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsStarting(true);
+    try {
+      // Build payload with workflow config and call details
+      const payload: Record<string, string> = {
+        phoneNumber: vapiCallConfig.phoneNumber,
+      };
+      if (vapiCallConfig.customerName) payload.customerName = vapiCallConfig.customerName;
+      if (selectedTemporalWorkflow?.vapiAssistantId) payload.assistantId = selectedTemporalWorkflow.vapiAssistantId;
+      if (selectedTemporalWorkflow?.vapiPhoneNumberId) payload.phoneNumberId = selectedTemporalWorkflow.vapiPhoneNumberId;
+      if (vapiCallConfig.campaignId) payload.campaignId = vapiCallConfig.campaignId;
+
+      // Always use demo backend URL
+      const serverUrl = DEMO_BACKEND_URL;
+      const response = await fetch(`${serverUrl}/api/campaigns/trigger-vapi-call`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to trigger call');
+      }
+
+      setActiveVapiCallId(data.callId || data.call_id);
+      setVapiCallStatus('initiated');
+
+      toast({
+        title: 'Call Initiated',
+        description: `Calling ${vapiCallConfig.phoneNumber}... Call ID: ${data.callId || data.call_id}`,
+      });
+
+      setIsVapiDialogOpen(false);
+      setVapiCallConfig({ phoneNumber: '', customerName: '', campaignId: '', assistantId: '', phoneNumberId: '' });
+    } catch (error) {
+      toast({
+        title: 'Failed to Start Call',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  // Check VAPI call status
+  const checkVapiCallStatus = async () => {
+    if (!activeVapiCallId) return;
+
+    try {
+      // Always use demo backend URL
+      const serverUrl = DEMO_BACKEND_URL;
+      const response = await fetch(`${serverUrl}/api/campaigns/vapi-call/${activeVapiCallId}/status`);
+      const data = await response.json();
+      setVapiCallStatus(data.status || 'unknown');
+    } catch (error) {
+      console.error('Failed to check call status:', error);
     }
   };
 
@@ -636,6 +734,149 @@ export const WorkflowsList: React.FC = () => {
             campaignName="Outbound Campaign"
             onClose={() => setActiveWorkflowId(null)}
           />
+        </div>
+      )}
+
+      {/* Temporal VAPI Call Dialog */}
+      <Dialog open={isVapiDialogOpen} onOpenChange={setIsVapiDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-purple-600" />
+              Temporal VAPI Call
+            </DialogTitle>
+            <DialogDescription>
+              Trigger an outbound call via deployed Temporal workflow
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="phoneNumber">Phone Number *</Label>
+                <Input
+                  id="phoneNumber"
+                  placeholder="+1234567890"
+                  value={vapiCallConfig.phoneNumber}
+                  onChange={(e) => setVapiCallConfig({
+                    ...vapiCallConfig,
+                    phoneNumber: e.target.value,
+                  })}
+                />
+                <p className="text-xs text-muted-foreground">E.164 format required</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customerName">Customer Name</Label>
+                <Input
+                  id="customerName"
+                  placeholder="John Doe"
+                  value={vapiCallConfig.customerName}
+                  onChange={(e) => setVapiCallConfig({
+                    ...vapiCallConfig,
+                    customerName: e.target.value,
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="campaignId">Campaign ID</Label>
+                <Input
+                  id="campaignId"
+                  placeholder="uuid"
+                  value={vapiCallConfig.campaignId}
+                  onChange={(e) => setVapiCallConfig({
+                    ...vapiCallConfig,
+                    campaignId: e.target.value,
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assistantId">Assistant ID</Label>
+                <Input
+                  id="assistantId"
+                  placeholder="vapi-asst-xxx"
+                  value={vapiCallConfig.assistantId}
+                  onChange={(e) => setVapiCallConfig({
+                    ...vapiCallConfig,
+                    assistantId: e.target.value,
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                <Input
+                  id="phoneNumberId"
+                  placeholder="vapi-phone-xxx"
+                  value={vapiCallConfig.phoneNumberId}
+                  onChange={(e) => setVapiCallConfig({
+                    ...vapiCallConfig,
+                    phoneNumberId: e.target.value,
+                  })}
+                />
+              </div>
+            </div>
+
+            <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg text-sm">
+              <p className="font-medium mb-1 text-purple-700">Temporal Workflow</p>
+              <p className="text-muted-foreground text-xs">
+                Triggers VAPI outbound call via deployed Temporal server. Optional fields use defaults if empty.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsVapiDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleStartVapiCall} disabled={isStarting} className="gap-2 bg-purple-600 hover:bg-purple-700">
+              {isStarting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Calling...
+                </>
+              ) : (
+                <>
+                  <Phone className="h-4 w-4" />
+                  Start Call
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Active VAPI Call Status */}
+      {activeVapiCallId && (
+        <div className="fixed bottom-4 right-4 w-80 z-50">
+          <Card className="shadow-lg border-purple-500/30">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-purple-600" />
+                  Active Call
+                </CardTitle>
+                <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                  {vapiCallStatus || 'initiated'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Call ID: {activeVapiCallId.slice(0, 16)}...
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={checkVapiCallStatus} className="flex-1">
+                  <Activity className="h-3 w-3 mr-1" />
+                  Check Status
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => {
+                  setActiveVapiCallId(null);
+                  setVapiCallStatus(null);
+                }}>
+                  Close
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
