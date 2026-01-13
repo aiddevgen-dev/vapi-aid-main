@@ -964,7 +964,7 @@ export const CompanyDashboard = () => {
               {recentCalls.length > 10 && (
                 <div className="flex justify-center py-4 border-t">
                   <Button variant="outline" onClick={() => setActiveSection('call-history')}>
-                    View All Calls
+                    View Full Report
                   </Button>
                 </div>
               )}
@@ -979,7 +979,17 @@ export const CompanyDashboard = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
-        return <DashboardOverview onNavigate={handleNavigate} />;
+        return (
+          <DashboardOverview
+            onNavigate={handleNavigate}
+            callStats={callStats}
+            agentPerformance={agentPerformance}
+            leadsCount={leads.length}
+            humanAgentsCount={1}
+            workflowsCount={3}
+            aiAgentsCount={1}
+          />
+        );
       case 'campaigns':
         return renderCampaignsContent();
       case 'ai-agents':
@@ -1027,11 +1037,21 @@ export const CompanyDashboard = () => {
           </div>
         );
       default:
-        return <DashboardOverview onNavigate={handleNavigate} />;
+        return (
+          <DashboardOverview
+            onNavigate={handleNavigate}
+            callStats={callStats}
+            agentPerformance={agentPerformance}
+            leadsCount={leads.length}
+            humanAgentsCount={1}
+            workflowsCount={3}
+            aiAgentsCount={1}
+          />
+        );
     }
   };
 
-  // Render the original Operations content (Call History and Leads)
+  // Render the original Operations content (Reporting and Leads)
   const renderOperationsContent = () => {
     // Determine which tab to show based on active section
     const defaultTab = activeSection === 'call-history' ? 'calls' : 'leads';
@@ -1042,7 +1062,7 @@ export const CompanyDashboard = () => {
         <Tabs defaultValue={defaultTab} className="space-y-4">
           <TabsList>
             {activeSection === 'call-history' && (
-              <TabsTrigger value="calls">Call History</TabsTrigger>
+              <TabsTrigger value="calls">Reporting</TabsTrigger>
             )}
             {activeSection === 'leads' && (
               <>
@@ -1357,80 +1377,69 @@ export const CompanyDashboard = () => {
             </div>
           </TabsContent>
 
-          {/* Call History Tab */}
+          {/* Reporting Tab */}
           <TabsContent value="calls">
             <Card>
               <CardHeader>
-                <CardTitle>Call History</CardTitle>
-                <CardDescription>View all calls handled by your team with transcripts and outcomes</CardDescription>
+                <CardTitle>Reporting</CardTitle>
+                <CardDescription>View all calls with their outcomes and status</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-8"></TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Agent</TableHead>
                       <TableHead>Duration</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Resolution</TableHead>
+                      <TableHead>Outcome</TableHead>
                       <TableHead>Date & Time</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {recentCalls.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
                           No calls yet.
                         </TableCell>
                       </TableRow>
                     ) : (
                       recentCalls.map((call) => (
-                        <React.Fragment key={call.id}>
-                          <TableRow
-                            className="cursor-pointer hover:bg-muted/50"
-                            onClick={() => toggleCallExpand(call.id)}
-                          >
-                            <TableCell>
-                              {expandedCallId === call.id ? (
-                                <ChevronUp className="h-4 w-4" />
+                        <TableRow key={call.id} className="hover:bg-muted/50">
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {call.call_direction === 'outbound' ? (
+                                <>
+                                  <PhoneOutgoing className="h-4 w-4 text-blue-500" />
+                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
+                                    Outbound
+                                  </Badge>
+                                </>
                               ) : (
-                                <ChevronDown className="h-4 w-4" />
+                                <>
+                                  <PhoneIncoming className="h-4 w-4 text-green-500" />
+                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
+                                    Inbound
+                                  </Badge>
+                                </>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {call.call_direction === 'outbound' ? (
-                                  <>
-                                    <PhoneOutgoing className="h-4 w-4 text-blue-500" />
-                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
-                                      Outbound
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <>
-                                    <PhoneIncoming className="h-4 w-4 text-green-500" />
-                                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
-                                      Inbound
-                                    </Badge>
-                                  </>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-mono">{call.customer_number}</TableCell>
-                            <TableCell>{call.agent_name}</TableCell>
-                            <TableCell>{formatCallDuration(call.duration)}</TableCell>
-                            <TableCell>
-                              <Badge variant={call.call_status === 'completed' ? 'default' : 'secondary'}>
-                                {call.call_status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {call.resolution_status ? (
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono">{call.customer_number}</TableCell>
+                          <TableCell>{call.agent_name}</TableCell>
+                          <TableCell>{formatCallDuration(call.duration)}</TableCell>
+                          <TableCell>
+                            <Badge variant={call.call_status === 'completed' ? 'default' : 'secondary'}>
+                              {call.call_status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1 max-w-[250px]">
+                              {call.resolution_status && (
                                 <Badge
                                   variant="outline"
-                                  className={`text-xs ${
+                                  className={`text-xs w-fit ${
                                     call.resolution_status === 'resolved'
                                       ? 'bg-green-500/10 text-green-600 border-green-500/30'
                                       : call.resolution_status === 'escalated'
@@ -1440,66 +1449,18 @@ export const CompanyDashboard = () => {
                                 >
                                   {call.resolution_status}
                                 </Badge>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">-</span>
                               )}
-                            </TableCell>
-                            <TableCell>{formatDateTime(call.created_at)}</TableCell>
-                          </TableRow>
-                          {expandedCallId === call.id && (
-                            <TableRow>
-                              <TableCell colSpan={8} className="bg-muted/30 p-4">
-                                <div className="space-y-4">
-                                  {/* Call Summary from Notes */}
-                                  {call.notes && (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2 text-sm font-medium">
-                                        <MessageSquare className="h-4 w-4" />
-                                        Call Summary
-                                      </div>
-                                      <div className="rounded-lg border bg-background p-3 max-h-48 overflow-y-auto">
-                                        <pre className="text-sm whitespace-pre-wrap font-sans">{call.notes}</pre>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Live Transcript */}
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm font-medium">
-                                      <MessageSquare className="h-4 w-4" />
-                                      Call Transcript
-                                    </div>
-                                    {loadingTranscript === call.id ? (
-                                      <div className="flex items-center gap-2 text-muted-foreground">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Loading transcript...
-                                      </div>
-                                    ) : callTranscripts[call.id]?.length > 0 ? (
-                                      <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border bg-background p-3">
-                                        {callTranscripts[call.id].map((t) => (
-                                          <div key={t.id} className={`flex gap-2 ${t.speaker === 'agent' ? 'justify-end' : ''}`}>
-                                            <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                                              t.speaker === 'agent'
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-muted'
-                                            }`}>
-                                              <div className="text-xs opacity-70 mb-1">
-                                                {t.speaker === 'agent' ? 'Agent' : 'Customer'}
-                                              </div>
-                                              {t.text}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-muted-foreground">No transcript available for this call.</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </React.Fragment>
+                              {call.notes ? (
+                                <span className="text-xs text-muted-foreground line-clamp-2" title={call.notes}>
+                                  {call.notes}
+                                </span>
+                              ) : !call.resolution_status ? (
+                                <span className="text-muted-foreground text-xs">-</span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatDateTime(call.created_at)}</TableCell>
+                        </TableRow>
                       ))
                     )}
                   </TableBody>
@@ -1859,7 +1820,7 @@ export const CompanyDashboard = () => {
   };
 
   return (
-    <div className="lyric-theme min-h-screen flex bg-background">
+    <div className="lyric-theme h-screen flex bg-background">
       {/* Sidebar */}
       <Sidebar activeSection={activeSection} onSectionChange={handleSectionChange} />
 
@@ -1872,8 +1833,8 @@ export const CompanyDashboard = () => {
               {company?.company_name || 'Company Dashboard'}
             </span>
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate('/auth?action=logout')} className="gap-2">
-            <LogOut className="h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => navigate('/auth?action=logout')} className="gap-2 text-purple-600 hover:text-purple-700">
+            <LogOut className="h-4 w-4 text-purple-600" />
             Sign Out
           </Button>
         </div>

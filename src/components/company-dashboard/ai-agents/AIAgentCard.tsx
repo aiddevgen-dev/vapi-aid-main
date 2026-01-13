@@ -106,10 +106,10 @@ export const AIAgentCard: React.FC<AIAgentCardProps> = ({
                     <Edit className="mr-2 h-4 w-4" />
                     View Details
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onViewAnalytics(agent)}>
+                  {/* <DropdownMenuItem onClick={() => onViewAnalytics(agent)}>
                     <BarChart3 className="mr-2 h-4 w-4" />
                     View Analytics
-                  </DropdownMenuItem>
+                  </DropdownMenuItem> */}
                 </>
               ) : (
                 <>

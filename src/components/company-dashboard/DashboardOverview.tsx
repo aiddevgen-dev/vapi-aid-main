@@ -8,59 +8,63 @@ import {
   Clock,
   TrendingUp,
   Plus,
-  BookOpen,
-  MessageSquare,
+  // BookOpen,
+  // MessageSquare,
   Headphones,
-  Building2,
-  Mail,
-  CheckCircle,
-  AlertCircle,
+  // Building2,
+  // Mail,
+  // CheckCircle,
+  // AlertCircle,
   ArrowRight,
   Activity,
+  Target,
+  GitBranch,
+  Megaphone,
+  Users,
 } from 'lucide-react';
+
+interface CallStats {
+  totalCalls: number;
+  callsToday: number;
+  avgDuration: number;
+  successRate: number;
+}
+
+interface AgentPerformance {
+  agent_id: string;
+  agent_name: string;
+  total_calls: number;
+  status: string;
+}
 
 interface DashboardOverviewProps {
   onNavigate: (section: string) => void;
+  callStats?: CallStats;
+  agentPerformance?: AgentPerformance[];
+  leadsCount?: number;
+  workflowsCount?: number;
+  aiAgentsCount?: number;
+  humanAgentsCount?: number;
 }
 
-export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  // Mock data for demonstration
-  const stats = {
-    activeAIAgents: 4,
-    totalCallsToday: 127,
-    avgResolutionTime: '2m 34s',
-    csatScore: 94,
+export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
+  onNavigate,
+  callStats,
+  agentPerformance = [],
+  leadsCount = 0,
+  workflowsCount = 0,
+  aiAgentsCount = 0,
+  humanAgentsCount = 0,
+}) => {
+  // Format duration for display
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
-  const integrationStatus = [
-    { name: 'WhatsApp', status: 'connected', icon: <MessageSquare className="h-4 w-4" /> },
-    { name: 'Zendesk', status: 'connected', icon: <Headphones className="h-4 w-4" /> },
-    { name: 'Salesforce', status: 'pending', icon: <Building2 className="h-4 w-4" /> },
-    { name: 'Avaya', status: 'connected', icon: <Phone className="h-4 w-4" /> },
-    { name: 'HubSpot', status: 'disconnected', icon: <Building2 className="h-4 w-4" /> },
-    { name: 'Email', status: 'connected', icon: <Mail className="h-4 w-4" /> },
-  ];
-
-  const recentActivity = [
-    { type: 'call', message: 'AI Agent "Sales Bot" completed call with +1 (555) 123-4567', time: '2 mins ago' },
-    { type: 'escalation', message: 'Call escalated to human agent: John Doe', time: '5 mins ago' },
-    { type: 'integration', message: 'Zendesk ticket #4521 created automatically', time: '12 mins ago' },
-    { type: 'call', message: 'AI Agent "Support Bot" resolved billing inquiry', time: '18 mins ago' },
-    { type: 'knowledge', message: 'Knowledge base updated: 3 new entries added', time: '1 hour ago' },
-  ];
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return <Badge className="bg-green-500/10 text-green-600 border-green-500/30">Connected</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">Pending</Badge>;
-      case 'disconnected':
-        return <Badge className="bg-red-500/10 text-red-600 border-red-500/30">Disconnected</Badge>;
-      default:
-        return <Badge variant="secondary">Unknown</Badge>;
-    }
-  };
+  // Get active agents count
+  const activeAgents = agentPerformance.filter(a => a.status === 'online').length;
 
   return (
     <div className="space-y-6">
@@ -75,9 +79,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <Plus className="h-4 w-4" />
             Create AI Agent
           </Button>
-          <Button variant="outline" onClick={() => onNavigate('knowledge-base')} className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            Add Knowledge
+          <Button variant="outline" onClick={() => onNavigate('leads')} className="gap-2">
+            <Target className="h-4 w-4" />
+            Add Lead
           </Button>
         </div>
       </div>
@@ -86,12 +90,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active AI Agents</CardTitle>
+            <CardTitle className="text-sm font-medium">AI Agents</CardTitle>
             <Bot className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.activeAIAgents}</div>
-            <p className="text-xs text-muted-foreground mt-1">Handling calls 24/7</p>
+            <div className="text-3xl font-bold">{aiAgentsCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {activeAgents > 0 ? `${activeAgents} active now` : 'Configure your agents'}
+            </p>
           </CardContent>
         </Card>
 
@@ -101,114 +107,146 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <Phone className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600">{stats.totalCallsToday}</div>
-            <p className="text-xs text-muted-foreground mt-1">+23% from yesterday</p>
+            <div className="text-3xl font-bold text-green-600">{callStats?.callsToday || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {callStats?.totalCalls || 0} total calls
+            </p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Avg Resolution Time</CardTitle>
+            <CardTitle className="text-sm font-medium">Avg Call Duration</CardTitle>
             <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600">{stats.avgResolutionTime}</div>
-            <p className="text-xs text-muted-foreground mt-1">-18% improvement</p>
+            <div className="text-3xl font-bold text-blue-600">
+              3m 25s
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Per completed call</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-500/5 to-purple-500/10 border-purple-500/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">CSAT Score</CardTitle>
+            <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-600">{stats.csatScore}%</div>
-            <p className="text-xs text-muted-foreground mt-1">Customer satisfaction</p>
+            <div className="text-3xl font-bold text-purple-600">{callStats?.successRate || 0}%</div>
+            <p className="text-xs text-muted-foreground mt-1">Call completion rate</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Integration Status */}
+        {/* System Overview */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Integration Status</CardTitle>
-                <CardDescription>Connected channels and services</CardDescription>
+                <CardTitle>System Overview</CardTitle>
+                <CardDescription>Your contact center at a glance</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate('integrations')} className="gap-1">
-                View All <ArrowRight className="h-3 w-3" />
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              {integrationStatus.map((integration) => (
-                <div
-                  key={integration.name}
-                  className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => onNavigate(integration.name.toLowerCase().replace(' ', '-'))}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
-                      {integration.icon}
-                    </div>
-                    <span className="font-medium text-sm">{integration.name}</span>
+              <div
+                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => onNavigate('ai-agents')}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-primary" />
                   </div>
-                  {integration.status === 'connected' ? (
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                  ) : integration.status === 'pending' ? (
-                    <AlertCircle className="h-4 w-4 text-yellow-500" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                  )}
+                  <span className="font-medium text-sm">AI Agents</span>
                 </div>
-              ))}
+                <Badge variant="secondary">{aiAgentsCount}</Badge>
+              </div>
+              <div
+                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => onNavigate('human-agents')}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                    <Headphones className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <span className="font-medium text-sm">Human Agents</span>
+                </div>
+                <Badge variant="secondary">{humanAgentsCount}</Badge>
+              </div>
+              <div
+                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => onNavigate('workflows')}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <GitBranch className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <span className="font-medium text-sm">Workflows</span>
+                </div>
+                <Badge variant="secondary">{workflowsCount}</Badge>
+              </div>
+              <div
+                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => onNavigate('leads')}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                    <Target className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span className="font-medium text-sm">Leads</span>
+                </div>
+                <Badge variant="secondary">{leadsCount}</Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
+        {/* Agent Performance Summary */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest events from your contact center</CardDescription>
+                <CardTitle>Agent Performance</CardTitle>
+                <CardDescription>Your team's recent activity</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate('call-history')} className="gap-1">
+              <Button variant="ghost" size="sm" onClick={() => onNavigate('campaigns')} className="gap-1">
                 View All <ArrowRight className="h-3 w-3" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-start gap-3">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                    activity.type === 'call' ? 'bg-green-500/10' :
-                    activity.type === 'escalation' ? 'bg-yellow-500/10' :
-                    activity.type === 'integration' ? 'bg-blue-500/10' :
-                    'bg-purple-500/10'
-                  }`}>
-                    {activity.type === 'call' ? (
-                      <Phone className="h-4 w-4 text-green-600" />
-                    ) : activity.type === 'escalation' ? (
-                      <Activity className="h-4 w-4 text-yellow-600" />
-                    ) : activity.type === 'integration' ? (
-                      <Headphones className="h-4 w-4 text-blue-600" />
-                    ) : (
-                      <BookOpen className="h-4 w-4 text-purple-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground truncate">{activity.message}</p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  </div>
+              {agentPerformance.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No agent data yet</p>
+                  <p className="text-xs">Performance will appear once calls are made</p>
                 </div>
-              ))}
+              ) : (
+                agentPerformance.slice(0, 4).map((agent) => (
+                  <div key={agent.agent_id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                        agent.status === 'online' ? 'bg-green-500/10' : 'bg-muted'
+                      }`}>
+                        <Headphones className={`h-4 w-4 ${
+                          agent.status === 'online' ? 'text-green-600' : 'text-muted-foreground'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{agent.agent_name}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{agent.status}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{agent.total_calls} calls</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -222,6 +260,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button
+              variant="outline"
+              className="h-auto flex-col gap-2 p-4"
+              onClick={() => onNavigate('campaigns')}
+            >
+              <Megaphone className="h-6 w-6" />
+              <span>View Campaigns</span>
+            </Button>
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 p-4"
@@ -241,18 +287,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <Button
               variant="outline"
               className="h-auto flex-col gap-2 p-4"
-              onClick={() => onNavigate('knowledge-base')}
+              onClick={() => onNavigate('leads')}
             >
-              <BookOpen className="h-6 w-6" />
-              <span>Update Knowledge</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto flex-col gap-2 p-4"
-              onClick={() => onNavigate('call-history')}
-            >
-              <Phone className="h-6 w-6" />
-              <span>View Call History</span>
+              <Target className="h-6 w-6" />
+              <span>Manage Leads</span>
             </Button>
           </div>
         </CardContent>

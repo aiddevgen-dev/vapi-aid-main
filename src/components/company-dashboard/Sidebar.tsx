@@ -7,20 +7,20 @@ import {
   Bot,
   BookOpen,
   GitBranch,
-  MessageSquare,
-  Phone,
-  Mail,
+  // MessageSquare,
+  // Phone,
+  // Mail,
   Headphones,
   Building2,
-  Users,
-  History,
+  // Users,
+  // BarChart3,
   Target,
   Settings,
   Key,
   ChevronDown,
   ChevronRight,
-  Zap,
-  Code2,
+  // Zap,
+  // Code2,
   Megaphone,
 } from 'lucide-react';
 
@@ -78,72 +78,72 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
         { id: 'human-agents' as SidebarSection, label: 'Human Agents', icon: <Headphones className="h-4 w-4" /> },
         { id: 'knowledge-base' as SidebarSection, label: 'Knowledge Base', icon: <BookOpen className="h-4 w-4" /> },
         { id: 'workflows' as SidebarSection, label: 'Workflows', icon: <GitBranch className="h-4 w-4" /> },
-      ],
-    },
-    {
-      id: 'integrations',
-      label: 'INTEGRATIONS',
-      items: [
-        {
-          id: 'integrations' as SidebarSection,
-          label: 'Overview',
-          icon: <Zap className="h-4 w-4" />,
-        },
-        {
-          id: 'whatsapp' as SidebarSection,
-          label: 'WhatsApp',
-          icon: <MessageSquare className="h-4 w-4" />,
-        },
-        {
-          id: 'avaya' as SidebarSection,
-          label: 'Voice (Avaya)',
-          icon: <Phone className="h-4 w-4" />,
-        },
-        {
-          id: 'email' as SidebarSection,
-          label: 'Email',
-          icon: <Mail className="h-4 w-4" />,
-        },
-        {
-          id: 'zendesk' as SidebarSection,
-          label: 'Zendesk',
-          icon: <Headphones className="h-4 w-4" />,
-        },
-        {
-          id: 'salesforce' as SidebarSection,
-          label: 'Salesforce',
-          icon: <Building2 className="h-4 w-4" />,
-        },
-        {
-          id: 'hubspot' as SidebarSection,
-          label: 'HubSpot',
-          icon: <Building2 className="h-4 w-4" />,
-        },
-        {
-          id: 'zoho' as SidebarSection,
-          label: 'Zoho CRM',
-          icon: <Building2 className="h-4 w-4" />,
-        },
-        {
-          id: 'pipedrive' as SidebarSection,
-          label: 'Pipedrive',
-          icon: <Target className="h-4 w-4" />,
-        },
-        {
-          id: 'custom' as SidebarSection,
-          label: 'Custom (BYO)',
-          icon: <Code2 className="h-4 w-4" />,
-        },
-      ],
-    },
-    {
-      id: 'operations',
-      label: 'OPERATIONS',
-      items: [
-        { id: 'call-history' as SidebarSection, label: 'Call History', icon: <History className="h-4 w-4" /> },
         { id: 'leads' as SidebarSection, label: 'Leads', icon: <Target className="h-4 w-4" /> },
       ],
     },
+    // {
+    //   id: 'integrations',
+    //   label: 'INTEGRATIONS',
+    //   items: [
+    //     {
+    //       id: 'integrations' as SidebarSection,
+    //       label: 'Overview',
+    //       icon: <Zap className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'whatsapp' as SidebarSection,
+    //       label: 'WhatsApp',
+    //       icon: <MessageSquare className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'avaya' as SidebarSection,
+    //       label: 'Voice (Avaya)',
+    //       icon: <Phone className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'email' as SidebarSection,
+    //       label: 'Email',
+    //       icon: <Mail className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'zendesk' as SidebarSection,
+    //       label: 'Zendesk',
+    //       icon: <Headphones className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'salesforce' as SidebarSection,
+    //       label: 'Salesforce',
+    //       icon: <Building2 className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'hubspot' as SidebarSection,
+    //       label: 'HubSpot',
+    //       icon: <Building2 className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'zoho' as SidebarSection,
+    //       label: 'Zoho CRM',
+    //       icon: <Building2 className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'pipedrive' as SidebarSection,
+    //       label: 'Pipedrive',
+    //       icon: <Target className="h-4 w-4" />,
+    //     },
+    //     {
+    //       id: 'custom' as SidebarSection,
+    //       label: 'Custom (BYO)',
+    //       icon: <Code2 className="h-4 w-4" />,
+    //     },
+    //   ],
+    // },
+    // {
+    //   id: 'operations',
+    //   label: 'OPERATIONS',
+    //   items: [
+    //     { id: 'call-history' as SidebarSection, label: 'Reporting', icon: <BarChart3 className="h-4 w-4" /> },
+    //   ],
+    // },
     {
       id: 'settings',
       label: 'SETTINGS',
@@ -211,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
             <Building2 className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Company Admin</p>
+            <p className="text-sm font-medium truncate text-purple-600">Company Admin</p>
             <p className="text-xs text-muted-foreground truncate">Admin Portal</p>
           </div>
         </div>
