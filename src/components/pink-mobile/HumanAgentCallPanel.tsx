@@ -60,8 +60,24 @@ export const HumanAgentCallPanel = ({
   const [callDuration, setCallDuration] = useState(0);
   const [ringingDuration, setRingingDuration] = useState(0);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogCall, setDialogCall] = useState<DbCall | null>(null);
 
   const currentCall = activeDbCall || incomingDbCall;
+
+  // Keep dialogCall in sync with activeDbCall when available
+  useEffect(() => {
+    if (activeDbCall) {
+      setDialogCall(activeDbCall);
+    }
+  }, [activeDbCall]);
+
+  // Auto-open dialog when there's an active in-progress call (e.g., page refresh during call)
+  useEffect(() => {
+    if (activeDbCall?.call_status === 'in-progress' && isConnected && !dialogCall) {
+      setDialogCall(activeDbCall);
+      setIsDialogOpen(true);
+    }
+  }, [activeDbCall?.call_status, isConnected]);
   const hasIncomingCall = (twilioCall && !isConnected) || (incomingDbCall && incomingDbCall.call_status === 'ringing');
   const hasActiveCall = isConnected || (activeDbCall && activeDbCall.call_status === 'in-progress');
   const showCallUI = twilioCall || currentCall;
@@ -131,6 +147,8 @@ export const HumanAgentCallPanel = ({
             body: { callId: call.id }
           });
 
+          // Set the call for dialog BEFORE opening to ensure it has data immediately
+          setDialogCall(call);
           onCallAnswered?.(call);
           setIsDialogOpen(true);
         }
@@ -171,6 +189,7 @@ export const HumanAgentCallPanel = ({
     }
     onCallEnded?.();
     setIsDialogOpen(false);
+    setDialogCall(null);
   };
 
   const handleEnd = async () => {
@@ -204,6 +223,7 @@ export const HumanAgentCallPanel = ({
     }
     onCallEnded?.();
     setIsDialogOpen(false);
+    setDialogCall(null);
   };
 
   const getStatusBadge = () => {
@@ -351,7 +371,7 @@ export const HumanAgentCallPanel = ({
       <ActiveCallDialogPink
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        activeCall={activeDbCall}
+        activeCall={dialogCall}
         isConnected={isConnected}
         isMuted={isMuted}
         isOnHold={isOnHold}
