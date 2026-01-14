@@ -41,6 +41,25 @@ interface WorkflowExecution {
 // Execution history
 const executions: WorkflowExecution[] = [
   {
+    id: '0',
+    workflowName: 'Inbound Call Orchestration',
+    status: 'completed',
+    startedAt: new Date(Date.now() - 1800000).toISOString(),
+    completedAt: new Date(Date.now() - 1500000).toISOString(),
+    nodes: [
+      { id: '1', type: 'trigger', label: 'Call Received', status: 'completed', details: 'Inbound +1 (555) 123-4567' },
+      { id: '2', type: 'ai_handling', label: 'AI Greets Caller', status: 'completed', details: 'Sara: "Hello, how can I help?"' },
+      { id: '3', type: 'tool_call', label: 'Lookup Customer', status: 'completed', details: 'CRM: Found existing customer' },
+      { id: '4', type: 'ai_handling', label: 'AI Qualifies Lead', status: 'completed', details: 'Intent: Schedule demo' },
+      { id: '5', type: 'webhook', label: 'Check Calendar', status: 'completed', details: 'Google Calendar API' },
+      { id: '6', type: 'tool_call', label: 'Book Appointment', status: 'completed', details: 'Slot: Jan 15, 2pm' },
+      { id: '7', type: 'webhook', label: 'Send Confirmation', status: 'completed', details: 'Email + SMS sent' },
+      { id: '8', type: 'tool_call', label: 'Update CRM', status: 'completed', details: 'Deal stage: Demo Scheduled' },
+      { id: '9', type: 'webhook', label: 'Notify Sales Team', status: 'completed', details: 'Slack #sales-alerts' },
+      { id: '10', type: 'complete', label: 'Call Completed', status: 'completed', details: 'Duration: 4m 32s' },
+    ],
+  },
+  {
     id: '1',
     workflowName: 'Lead Follow-up',
     status: 'completed',
@@ -184,7 +203,7 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
 
         {/* Visualization Dialog */}
         <Dialog open={isVisualizationOpen} onOpenChange={setIsVisualizationOpen}>
-          <DialogContent className="max-w-4xl p-0 overflow-hidden border-purple-500/30">
+          <DialogContent className="max-w-4xl p-0 border-purple-500/30">
             <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/50 to-violet-950/50">
               <DialogTitle className="text-lg font-semibold text-white">
                 {selectedExecution?.workflowName}
@@ -194,72 +213,91 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
               </DialogDescription>
             </div>
 
-            <div className="p-6 bg-gradient-to-br from-[#1e1033] via-[#1a0a2e] to-[#0f0518] min-h-[350px] relative overflow-hidden">
+            <div className="bg-gradient-to-br from-[#1e1033] via-[#1a0a2e] to-[#0f0518] h-[400px] relative overflow-x-auto overflow-y-hidden">
               <div
-                className="absolute inset-0 opacity-20"
+                className="absolute inset-0 opacity-20 pointer-events-none"
                 style={{
                   backgroundImage: 'radial-gradient(circle, #a855f7 1px, transparent 1px)',
                   backgroundSize: '24px 24px'
                 }}
               />
 
-              <style>{`
-                @keyframes flowPulseHistory {
-                  0% { left: 0%; opacity: 0; }
-                  10% { opacity: 1; }
-                  90% { opacity: 1; }
-                  100% { left: 100%; opacity: 0; }
-                }
-                .flow-particle-history {
-                  animation: flowPulseHistory 3s ease-in-out infinite;
-                }
-              `}</style>
+              {/* Scrollable workflow area */}
+              <div className="h-full p-6 flex items-center" style={{ width: 'max-content', minWidth: '100%' }}>
+                <div className="flex items-center gap-4 flex-nowrap">
+                    {selectedExecution?.nodes.map((node, idx) => {
+                      const colors = nodeColors[node.type];
+                      const isActive = node.status === 'active';
+                      const isCompleted = node.status === 'completed';
+                      const isPending = node.status === 'pending';
+                      const isLast = idx === (selectedExecution?.nodes.length || 0) - 1;
 
-              <div className="relative">
-                {/* Flow Track */}
-                <div className="absolute top-[56px] left-[8%] right-[8%] h-1 bg-gradient-to-r from-purple-500/40 via-violet-500/40 to-fuchsia-500/40 rounded-full">
-                  {selectedExecution?.status === 'in_progress' && (
-                    <div className="flow-particle-history absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-purple-300 shadow-lg shadow-purple-400/50" style={{ filter: 'blur(2px)' }} />
-                  )}
-                </div>
+                      return (
+                        <div key={node.id} className="flex items-center">
+                          {/* Node Card */}
+                          <div className={`
+                            relative flex flex-col items-center p-4 rounded-xl border-2 min-w-[140px] max-w-[160px]
+                            ${isCompleted || isActive
+                              ? `bg-gradient-to-br ${colors.bg} ${colors.border} shadow-lg ${colors.shadow}`
+                              : 'bg-gray-800/50 border-gray-600/50'}
+                            ${isActive ? 'animate-pulse' : ''}
+                            ${isPending ? 'opacity-40' : ''}
+                          `}>
+                            {/* Step number */}
+                            <div className={`absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                              ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-purple-400 text-white' : 'bg-gray-600 text-gray-300'}
+                            `}>
+                              {idx + 1}
+                            </div>
 
-                {/* Nodes */}
-                <div className="relative flex items-start justify-between px-[3%]">
-                  {selectedExecution?.nodes.map((node) => {
-                    const colors = nodeColors[node.type];
-                    const isActive = node.status === 'active';
-                    const isCompleted = node.status === 'completed';
-                    const isPending = node.status === 'pending';
+                            {/* Icon */}
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-2
+                              ${isCompleted || isActive ? 'bg-white/20' : 'bg-gray-700/50'}
+                            `}>
+                              <span className={isCompleted || isActive ? 'text-white' : 'text-gray-400'}>
+                                {nodeIcons[node.type]}
+                              </span>
+                            </div>
 
-                    return (
-                      <div key={node.id} className="flex flex-col items-center z-10" style={{ minWidth: '80px' }}>
-                        <div className={`
-                          w-14 h-14 rounded-2xl flex items-center justify-center border-2
-                          ${isCompleted || isActive ? `bg-gradient-to-br ${colors.bg} ${colors.border} shadow-lg ${colors.shadow}` : 'bg-gray-700/50 border-gray-600/50'}
-                          ${isActive ? 'animate-pulse' : ''}
-                          ${isPending ? 'opacity-50' : ''}
-                        `}>
-                          <span className={isCompleted || isActive ? 'text-white' : 'text-gray-400'}>
-                            {nodeIcons[node.type]}
-                          </span>
+                            {/* Label */}
+                            <span className={`text-sm font-semibold text-center leading-tight
+                              ${isCompleted || isActive ? 'text-white' : 'text-gray-400'}
+                            `}>
+                              {node.label}
+                            </span>
+
+                            {/* Details */}
+                            {node.details && (
+                              <span className={`text-[11px] mt-1 text-center leading-tight
+                                ${isCompleted || isActive ? 'text-white/70' : 'text-gray-500'}
+                              `}>
+                                {node.details}
+                              </span>
+                            )}
+
+                            {/* Status indicator */}
+                            {isCompleted && (
+                              <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <CheckCircle2 className="h-4 w-4 text-white" />
+                              </div>
+                            )}
+                            {isActive && (
+                              <span className="text-[10px] text-white/80 mt-2 animate-pulse">Running...</span>
+                            )}
+                          </div>
+
+                          {/* Arrow connector */}
+                          {!isLast && (
+                            <div className="flex items-center mx-1">
+                              <div className={`w-8 h-0.5 ${isCompleted ? 'bg-purple-400' : 'bg-gray-600'}`} />
+                              <div className={`w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent
+                                ${isCompleted ? 'border-l-[8px] border-l-purple-400' : 'border-l-[8px] border-l-gray-600'}
+                              `} />
+                            </div>
+                          )}
                         </div>
-                        <span className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-purple-300' : 'text-gray-500'}`}>
-                          {node.label}
-                        </span>
-                        {node.details && (
-                          <span className="text-[10px] text-purple-400/60 text-center max-w-[80px] truncate">
-                            {node.details}
-                          </span>
-                        )}
-                        {isCompleted && (
-                          <CheckCircle2 className="h-3 w-3 text-green-400 mt-1" />
-                        )}
-                        {isActive && (
-                          <span className="text-[10px] text-purple-400 mt-1 animate-pulse">Running...</span>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
             </div>
@@ -283,9 +321,12 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
                   </>
                 )}
               </div>
-              <Button variant="outline" size="sm" onClick={() => setIsVisualizationOpen(false)} className="border-purple-500/30 hover:bg-purple-500/10">
-                Close
-              </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-purple-400/60 text-xs">← Scroll to see all steps →</span>
+                <Button variant="outline" size="sm" onClick={() => setIsVisualizationOpen(false)} className="border-purple-500/30 hover:bg-purple-500/10">
+                  Close
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -390,7 +431,7 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
 
       {/* Visualization Dialog - Same as compact */}
       <Dialog open={isVisualizationOpen} onOpenChange={setIsVisualizationOpen}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden border-purple-500/30">
+        <DialogContent className="max-w-4xl p-0 border-purple-500/30">
           <div className="px-6 py-4 border-b border-purple-500/20 bg-gradient-to-r from-purple-950/50 to-violet-950/50">
             <DialogTitle className="text-lg font-semibold text-white">
               {selectedExecution?.workflowName}
@@ -400,70 +441,91 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
             </DialogDescription>
           </div>
 
-          <div className="p-6 bg-gradient-to-br from-[#1e1033] via-[#1a0a2e] to-[#0f0518] min-h-[350px] relative overflow-hidden">
+          <div className="bg-gradient-to-br from-[#1e1033] via-[#1a0a2e] to-[#0f0518] h-[400px] relative overflow-x-auto overflow-y-hidden">
             <div
-              className="absolute inset-0 opacity-20"
+              className="absolute inset-0 opacity-20 pointer-events-none"
               style={{
                 backgroundImage: 'radial-gradient(circle, #a855f7 1px, transparent 1px)',
                 backgroundSize: '24px 24px'
               }}
             />
 
-            <style>{`
-              @keyframes flowPulseHistoryFull {
-                0% { left: 0%; opacity: 0; }
-                10% { opacity: 1; }
-                90% { opacity: 1; }
-                100% { left: 100%; opacity: 0; }
-              }
-              .flow-particle-history-full {
-                animation: flowPulseHistoryFull 3s ease-in-out infinite;
-              }
-            `}</style>
+            {/* Scrollable workflow area */}
+            <div className="h-full p-6 flex items-center" style={{ width: 'max-content', minWidth: '100%' }}>
+              <div className="flex items-center gap-4 flex-nowrap">
+                  {selectedExecution?.nodes.map((node, idx) => {
+                    const colors = nodeColors[node.type];
+                    const isActive = node.status === 'active';
+                    const isCompleted = node.status === 'completed';
+                    const isPending = node.status === 'pending';
+                    const isLast = idx === (selectedExecution?.nodes.length || 0) - 1;
 
-            <div className="relative">
-              <div className="absolute top-[56px] left-[8%] right-[8%] h-1 bg-gradient-to-r from-purple-500/40 via-violet-500/40 to-fuchsia-500/40 rounded-full">
-                {selectedExecution?.status === 'in_progress' && (
-                  <div className="flow-particle-history-full absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-purple-300 shadow-lg shadow-purple-400/50" style={{ filter: 'blur(2px)' }} />
-                )}
-              </div>
+                    return (
+                      <div key={node.id} className="flex items-center">
+                        {/* Node Card */}
+                        <div className={`
+                          relative flex flex-col items-center p-4 rounded-xl border-2 min-w-[140px] max-w-[160px]
+                          ${isCompleted || isActive
+                            ? `bg-gradient-to-br ${colors.bg} ${colors.border} shadow-lg ${colors.shadow}`
+                            : 'bg-gray-800/50 border-gray-600/50'}
+                          ${isActive ? 'animate-pulse' : ''}
+                          ${isPending ? 'opacity-40' : ''}
+                        `}>
+                          {/* Step number */}
+                          <div className={`absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                            ${isCompleted ? 'bg-green-500 text-white' : isActive ? 'bg-purple-400 text-white' : 'bg-gray-600 text-gray-300'}
+                          `}>
+                            {idx + 1}
+                          </div>
 
-              <div className="relative flex items-start justify-between px-[3%]">
-                {selectedExecution?.nodes.map((node) => {
-                  const colors = nodeColors[node.type];
-                  const isActive = node.status === 'active';
-                  const isCompleted = node.status === 'completed';
-                  const isPending = node.status === 'pending';
+                          {/* Icon */}
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-2
+                            ${isCompleted || isActive ? 'bg-white/20' : 'bg-gray-700/50'}
+                          `}>
+                            <span className={isCompleted || isActive ? 'text-white' : 'text-gray-400'}>
+                              {nodeIcons[node.type]}
+                            </span>
+                          </div>
 
-                  return (
-                    <div key={node.id} className="flex flex-col items-center z-10" style={{ minWidth: '80px' }}>
-                      <div className={`
-                        w-14 h-14 rounded-2xl flex items-center justify-center border-2
-                        ${isCompleted || isActive ? `bg-gradient-to-br ${colors.bg} ${colors.border} shadow-lg ${colors.shadow}` : 'bg-gray-700/50 border-gray-600/50'}
-                        ${isActive ? 'animate-pulse' : ''}
-                        ${isPending ? 'opacity-50' : ''}
-                      `}>
-                        <span className={isCompleted || isActive ? 'text-white' : 'text-gray-400'}>
-                          {nodeIcons[node.type]}
-                        </span>
+                          {/* Label */}
+                          <span className={`text-sm font-semibold text-center leading-tight
+                            ${isCompleted || isActive ? 'text-white' : 'text-gray-400'}
+                          `}>
+                            {node.label}
+                          </span>
+
+                          {/* Details */}
+                          {node.details && (
+                            <span className={`text-[11px] mt-1 text-center leading-tight
+                              ${isCompleted || isActive ? 'text-white/70' : 'text-gray-500'}
+                            `}>
+                              {node.details}
+                            </span>
+                          )}
+
+                          {/* Status indicator */}
+                          {isCompleted && (
+                            <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                              <CheckCircle2 className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          {isActive && (
+                            <span className="text-[10px] text-white/80 mt-2 animate-pulse">Running...</span>
+                          )}
+                        </div>
+
+                        {/* Arrow connector */}
+                        {!isLast && (
+                          <div className="flex items-center mx-1">
+                            <div className={`w-8 h-0.5 ${isCompleted ? 'bg-purple-400' : 'bg-gray-600'}`} />
+                            <div className={`w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent
+                              ${isCompleted ? 'border-l-[8px] border-l-purple-400' : 'border-l-[8px] border-l-gray-600'}
+                            `} />
+                          </div>
+                        )}
                       </div>
-                      <span className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-purple-300' : 'text-gray-500'}`}>
-                        {node.label}
-                      </span>
-                      {node.details && (
-                        <span className="text-[10px] text-purple-400/60 text-center max-w-[80px] truncate">
-                          {node.details}
-                        </span>
-                      )}
-                      {isCompleted && (
-                        <CheckCircle2 className="h-3 w-3 text-green-400 mt-1" />
-                      )}
-                      {isActive && (
-                        <span className="text-[10px] text-purple-400 mt-1 animate-pulse">Running...</span>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
           </div>
@@ -487,9 +549,12 @@ export const WorkflowHistoryPanel = ({ variant = 'full' }: WorkflowHistoryPanelP
                 </>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={() => setIsVisualizationOpen(false)} className="border-purple-500/30 hover:bg-purple-500/10">
-              Close
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-purple-400/60 text-xs">← Scroll to see all steps →</span>
+              <Button variant="outline" size="sm" onClick={() => setIsVisualizationOpen(false)} className="border-purple-500/30 hover:bg-purple-500/10">
+                Close
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
