@@ -385,6 +385,8 @@ export const WorkflowsList: React.FC = () => {
 
   // Start the actual call via Temporal backend
   const handleStartCall = async () => {
+    console.log('=== handleStartCall triggered ===');
+
     if (!vapiCallConfig.phoneNumber) {
       toast({
         title: 'Phone Number Required',
@@ -411,6 +413,8 @@ export const WorkflowsList: React.FC = () => {
         payload.triggerSource = selectedWorkflow.triggerSource;
       }
 
+      console.log('Calling Temporal backend with payload:', payload);
+
       // Call Temporal backend
       const response = await fetch(`${DEMO_BACKEND_URL}/api/campaigns/trigger-vapi-call`, {
         method: 'POST',
@@ -421,13 +425,38 @@ export const WorkflowsList: React.FC = () => {
       });
 
       const data = await response.json();
+      console.log('Response from Temporal backend:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to trigger call');
       }
 
-      setActiveVapiCallId(data.callId || data.call_id);
+      const vapiCallId = data.callId || data.call_id;
+      console.log('Extracted vapiCallId:', vapiCallId);
+      setActiveVapiCallId(vapiCallId);
       setVapiCallStatus('initiated');
+
+      // Save call to calls table so it appears in Live Calls
+      if (vapiCallId) {
+        console.log('Saving call to database with vapi_call_id:', vapiCallId);
+        const { data: insertedCall, error: insertError } = await supabase
+          .from('calls')
+          .insert({
+            customer_number: vapiCallConfig.phoneNumber,
+            call_direction: 'outbound',
+            call_status: 'in-progress',
+            vapi_call_id: vapiCallId,
+          } as any)
+          .select();
+
+        if (insertError) {
+          console.error('Error saving call to database:', insertError);
+        } else {
+          console.log('Call saved successfully:', insertedCall);
+        }
+      } else {
+        console.warn('No vapiCallId received from response');
+      }
 
       toast({
         title: 'Call Initiated',

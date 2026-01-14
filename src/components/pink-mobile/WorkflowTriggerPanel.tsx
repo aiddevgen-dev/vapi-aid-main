@@ -204,12 +204,35 @@ export const WorkflowTriggerPanel = () => {
       });
 
       const data = await response.json();
+      console.log('Response from Temporal backend:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to trigger call');
       }
 
-      setActiveCallId(data.callId || data.call_id);
+      const vapiCallId = data.vapiCallId || data.callId || data.call_id;
+      console.log('Extracted vapiCallId:', vapiCallId);
+      setActiveCallId(vapiCallId);
+
+      // Save call to calls table so it appears in Live Calls
+      if (vapiCallId) {
+        console.log('Saving call to database with vapi_call_id:', vapiCallId);
+        const { data: insertedCall, error: insertError } = await supabase
+          .from('calls')
+          .insert({
+            customer_number: phoneNumber,
+            call_direction: 'outbound',
+            call_status: 'completed',
+            vapi_call_id: vapiCallId,
+          } as any)
+          .select();
+
+        if (insertError) {
+          console.error('Error saving call to database:', insertError);
+        } else {
+          console.log('Call saved successfully:', insertedCall);
+        }
+      }
 
       toast({
         title: 'Workflow Started',

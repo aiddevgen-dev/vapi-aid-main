@@ -23,6 +23,7 @@ interface CallRecord {
   ended_at?: string;
   created_at: string;
   agent_name?: string;
+  vapi_call_id?: string;
 }
 
 const CALLS_PER_PAGE = 10;
@@ -53,7 +54,7 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
       // First, always get active calls (no limit)
       const { data: activeCalls, error: activeError } = await supabase
         .from('calls')
-        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id')
+        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id, vapi_call_id')
         .eq('call_status', 'in-progress')
         .order('created_at', { ascending: false });
 
@@ -64,7 +65,7 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
       // Then get completed/other calls with pagination
       const { data: otherCalls, error: otherError, count } = await supabase
         .from('calls')
-        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id', { count: 'exact' })
+        .select('id, customer_number, call_direction, call_status, started_at, ended_at, created_at, agent_id, vapi_call_id', { count: 'exact' })
         .neq('call_status', 'in-progress')
         .order('created_at', { ascending: false })
         .range(offset, offset + CALLS_PER_PAGE - 1);
@@ -94,6 +95,7 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
         ended_at: call.ended_at,
         created_at: call.created_at,
         agent_name: 'Sara AI',
+        vapi_call_id: call.vapi_call_id,
       }));
 
       setCalls(mappedCalls);
@@ -380,6 +382,7 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
           setSelectedCallForTranscript(null);
         }}
         callId={selectedCallForTranscript?.id || null}
+        vapiCallId={selectedCallForTranscript?.vapi_call_id}
         customerNumber={selectedCallForTranscript?.customer_number}
         callDirection={selectedCallForTranscript?.call_direction}
         callStatus={selectedCallForTranscript?.call_status}

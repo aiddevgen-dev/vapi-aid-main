@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.twilio-start-transcription]
 verify_jwt = false
+
+[functions.vapi-get-transcript]
+verify_jwt = false

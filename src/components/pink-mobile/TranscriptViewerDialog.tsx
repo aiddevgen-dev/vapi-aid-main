@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,7 @@ interface TranscriptViewerDialogProps {
   isOpen: boolean;
   onClose: () => void;
   callId: string | null;
+  vapiCallId?: string;
   customerNumber?: string;
   callDirection?: 'inbound' | 'outbound';
   callStatus?: string;
@@ -50,6 +51,7 @@ export const TranscriptViewerDialog = ({
   isOpen,
   onClose,
   callId,
+  vapiCallId,
   customerNumber,
   callDirection,
   callStatus,
@@ -61,7 +63,66 @@ export const TranscriptViewerDialog = ({
   const [copiedSuggestions, setCopiedSuggestions] = useState<Set<string>>(new Set());
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [isFetchingVapi, setIsFetchingVapi] = useState(false);
   const { toast } = useToast();
+
+  // Fetch transcript from VAPI API on button click
+  const handleFetchVapiTranscript = async () => {
+    if (!vapiCallId || !callId) return;
+
+    setIsFetchingVapi(true);
+    try {
+      const { data: vapiData, error: vapiError } = await supabase.functions.invoke('vapi-get-transcript', {
+        body: { callId: vapiCallId },
+      });
+
+      if (vapiError) {
+        throw vapiError;
+      }
+
+      if (vapiData?.success && vapiData?.data?.transcript) {
+        // Save transcript to local database
+        const { data: insertedTranscript, error: insertError } = await supabase
+          .from('transcripts')
+          .insert({
+            call_id: callId,
+            speaker: 'agent',
+            text: vapiData.data.transcript,
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error saving transcript:', insertError);
+        }
+
+        // Add to local state
+        if (insertedTranscript) {
+          setTranscripts(prev => [...prev, insertedTranscript]);
+        }
+
+        toast({
+          title: 'Transcript Loaded',
+          description: 'Call transcript fetched successfully',
+        });
+      } else {
+        toast({
+          title: 'No Transcript',
+          description: 'No transcript available yet. Call may still be in progress.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching VAPI transcript:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch transcript',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFetchingVapi(false);
+    }
+  };
 
   // Load transcripts when dialog opens
   useEffect(() => {
@@ -76,7 +137,7 @@ export const TranscriptViewerDialog = ({
       setIsLoadingSuggestions(true);
 
       try {
-        // Load transcripts
+        // Load transcripts from local database
         const { data: transcriptData, error: transcriptError } = await supabase
           .from('transcripts')
           .select('*')
@@ -237,6 +298,22 @@ export const TranscriptViewerDialog = ({
                     <div className="text-center py-8">
                       <Headphones className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground">No transcript available for this call</p>
+                      {vapiCallId && (
+                        <Button
+                          onClick={handleFetchVapiTranscript}
+                          disabled={isFetchingVapi}
+                          className="mt-4"
+                        >
+                          {isFetchingVapi ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Fetching...
+                            </>
+                          ) : (
+                            'Fetch Transcript'
+                          )}
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-1 pb-4">
