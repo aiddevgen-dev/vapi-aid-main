@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   X,
   Phone,
@@ -69,16 +68,40 @@ export const ActiveCallDialogPink = ({
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
+  const suggestionsScrollRef = useRef<HTMLDivElement>(null);
+  const [transcriptAutoScroll, setTranscriptAutoScroll] = useState(true);
+  const [suggestionsAutoScroll, setSuggestionsAutoScroll] = useState(true);
   const { toast } = useToast();
 
   const callId = activeCall?.id || null;
 
-  // Auto-scroll transcripts to bottom
+  // Smart auto-scroll transcripts - only if user is at bottom
   useEffect(() => {
-    if (transcriptScrollRef.current) {
+    if (transcriptScrollRef.current && transcriptAutoScroll) {
       transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
     }
-  }, [transcripts]);
+  }, [transcripts, transcriptAutoScroll]);
+
+  // Smart auto-scroll suggestions - only if user is at top (newest first)
+  useEffect(() => {
+    if (suggestionsScrollRef.current && suggestionsAutoScroll) {
+      suggestionsScrollRef.current.scrollTop = 0;
+    }
+  }, [suggestions, suggestionsAutoScroll]);
+
+  // Handle transcript scroll - detect if user scrolled away from bottom
+  const handleTranscriptScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    setTranscriptAutoScroll(isAtBottom);
+  };
+
+  // Handle suggestions scroll - detect if user scrolled away from top
+  const handleSuggestionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const isAtTop = el.scrollTop < 50;
+    setSuggestionsAutoScroll(isAtTop);
+  };
 
   // Load and subscribe to transcripts
   useEffect(() => {
@@ -283,7 +306,7 @@ export const ActiveCallDialogPink = ({
         <div className="flex-1 overflow-hidden p-6">
           <div className="grid grid-cols-2 gap-6 h-full">
             {/* Left side - Live Transcription */}
-            <Card className="h-full bg-card border-border flex flex-col">
+            <Card className="h-full min-h-0 bg-card border-border flex flex-col overflow-hidden">
               <CardHeader className="pb-3 flex-shrink-0">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <MessageSquare className="h-5 w-5 text-primary" />
@@ -294,7 +317,11 @@ export const ActiveCallDialogPink = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 flex-1 min-h-0">
-                <ScrollArea className="h-full px-4">
+                <div
+                  ref={transcriptScrollRef}
+                  onScroll={handleTranscriptScroll}
+                  className="h-full overflow-y-scroll px-4 dialog-scroll-transcripts"
+                >
                   {isLoadingTranscripts ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -305,7 +332,7 @@ export const ActiveCallDialogPink = ({
                       <p className="text-muted-foreground">Waiting for audio to transcribe...</p>
                     </div>
                   ) : (
-                    <div className="space-y-1 pb-4" ref={transcriptScrollRef}>
+                    <div className="space-y-1 pb-4">
                       {transcripts.map((transcript, index) => (
                         <div key={transcript.id} className="py-2">
                           <div className="flex items-start gap-3">
@@ -351,12 +378,12 @@ export const ActiveCallDialogPink = ({
                       ))}
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </CardContent>
             </Card>
 
             {/* Right side - AI Suggestions */}
-            <Card className="h-full bg-card border-border flex flex-col">
+            <Card className="h-full min-h-0 bg-card border-border flex flex-col overflow-hidden">
               <CardHeader className="pb-3 flex-shrink-0">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-purple-600" />
@@ -372,7 +399,11 @@ export const ActiveCallDialogPink = ({
                 </p>
               </CardHeader>
               <CardContent className="p-0 flex-1 min-h-0">
-                <ScrollArea className="h-full px-4">
+                <div
+                  ref={suggestionsScrollRef}
+                  onScroll={handleSuggestionsScroll}
+                  className="h-full overflow-y-scroll px-4 dialog-scroll-suggestions"
+                >
                   {isLoadingSuggestions ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
@@ -444,7 +475,7 @@ export const ActiveCallDialogPink = ({
                       })}
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </CardContent>
             </Card>
           </div>

@@ -135,20 +135,69 @@ All colors MUST be HSL.
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-accent {
     background: var(--gradient-accent);
   }
-  
+
   .gradient-hero {
     background: var(--gradient-hero);
   }
-  
+
   .shadow-primary {
     box-shadow: var(--shadow-primary);
   }
-  
+
   .shadow-accent {
     box-shadow: var(--shadow-accent);
+  }
+}
+
+/* Custom scrollbar styles for Active Call Dialog */
+@layer utilities {
+  .dialog-scroll-transcripts {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  .dialog-scroll-transcripts::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .dialog-scroll-transcripts::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .dialog-scroll-transcripts::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 4px;
+  }
+
+  .dialog-scroll-transcripts::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+
+  .dialog-scroll-suggestions {
+    scrollbar-width: thin;
+    scrollbar-color: #a855f7 #f3e8ff;
+  }
+
+  .dialog-scroll-suggestions::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .dialog-scroll-suggestions::-webkit-scrollbar-track {
+    background: #f3e8ff;
+    border-radius: 4px;
+  }
+
+  .dialog-scroll-suggestions::-webkit-scrollbar-thumb {
+    background: #a855f7;
+    border-radius: 4px;
+  }
+
+  .dialog-scroll-suggestions::-webkit-scrollbar-thumb:hover {
+    background: #9333ea;
   }
 }
