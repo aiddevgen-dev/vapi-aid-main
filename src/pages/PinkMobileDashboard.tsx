@@ -132,23 +132,25 @@ export const PinkMobileDashboard = () => {
       const currentAgentId = await getCurrentAgentId();
       console.log('[PinkMobile] Initializing call state for agent:', currentAgentId);
 
-      // Check for existing ringing calls
+      // Check for existing ringing calls (exclude VAPI calls - they have vapi_call_id)
       const { data: ringingCalls } = await supabase
         .from('calls')
         .select('*')
         .eq('call_direction', 'inbound')
         .eq('call_status', 'ringing')
+        .is('vapi_call_id', null) // Exclude VAPI AI calls
         .or(`agent_id.eq.${currentAgentId},agent_id.is.null`)
         .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString())
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // Check for existing active calls (only inbound/transferred calls, not outbound AI calls)
+      // Check for existing active calls (only inbound/transferred calls, not outbound AI calls or VAPI calls)
       const { data: activeCalls } = await supabase
         .from('calls')
         .select('*')
         .eq('call_status', 'in-progress')
         .eq('call_direction', 'inbound')
+        .is('vapi_call_id', null) // Exclude VAPI AI calls
         .eq('agent_id', currentAgentId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -197,23 +199,25 @@ export const PinkMobileDashboard = () => {
       }
 
       if (allCalls && allCalls.length > 0) {
-        // Check for active call (only inbound/transferred calls, not outbound AI calls)
+        // Check for active call (only inbound/transferred calls, not outbound AI calls or VAPI calls)
         const activeCallInDb = allCalls.find(c =>
           c.agent_id === currentAgentId &&
           c.call_status === 'in-progress' &&
-          c.call_direction === 'inbound'
+          c.call_direction === 'inbound' &&
+          !c.vapi_call_id // Exclude VAPI AI calls
         );
         if (activeCallInDb && !activeCall) {
           setActiveCall(activeCallInDb as Call);
           setIncomingCall(null);
         }
 
-        // Check for ringing calls
+        // Check for ringing calls (exclude VAPI calls)
         if (!activeCall) {
           const ringingCallInDb = allCalls.find(c =>
             (c.agent_id === currentAgentId || !c.agent_id) &&
             c.call_status === 'ringing' &&
-            c.call_direction === 'inbound'
+            c.call_direction === 'inbound' &&
+            !c.vapi_call_id // Exclude VAPI AI calls
           );
           if (ringingCallInDb && !incomingCall) {
             const callAge = Date.now() - new Date(ringingCallInDb.created_at).getTime();
@@ -247,8 +251,10 @@ export const PinkMobileDashboard = () => {
         const callAge = Date.now() - new Date(newCall.created_at).getTime();
         const isRecentCall = callAge < 15 * 60 * 1000;
 
+        // Only handle non-VAPI inbound calls for Human Line
         if (newCall.call_direction === 'inbound' &&
             newCall.call_status === 'ringing' &&
+            !newCall.vapi_call_id && // Exclude VAPI AI calls
             (!newCall.agent_id || newCall.agent_id === currentAgentId) &&
             !activeCall &&
             isRecentCall) {

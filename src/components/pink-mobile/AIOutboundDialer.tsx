@@ -49,6 +49,8 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
   const [callingNumber, setCallingNumber] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(propAgentId || null);
   const [activeCallDbId, setActiveCallDbId] = useState<string | null>(null);
+  const [activeCallDirection, setActiveCallDirection] = useState<'inbound' | 'outbound' | null>(null);
+  const [activeCallNumber, setActiveCallNumber] = useState<string | null>(null);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [liveTranscripts, setLiveTranscripts] = useState<Array<{ speaker: string; text: string; created_at: string }>>([]);
 
@@ -126,6 +128,44 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
       ));
     }
   }, [searchQuery, customers]);
+
+  // Check for inbound VAPI calls (polling as reliable fallback)
+  useEffect(() => {
+    const checkInboundCalls = async () => {
+      // Skip if we already have an active call
+      if (activeCallDbId) return;
+
+      const { data: inboundCall } = await supabase
+        .from('calls')
+        .select('id, customer_number, call_direction')
+        .eq('call_direction', 'inbound')
+        .eq('call_status', 'in-progress')
+        .not('vapi_call_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (inboundCall) {
+        console.log('AIOutboundDialer: Found inbound VAPI call:', inboundCall.id);
+        setActiveCallDbId(inboundCall.id);
+        setActiveCallDirection('inbound');
+        setActiveCallNumber(inboundCall.customer_number);
+        setLiveTranscripts([]);
+        toast({
+          title: "Incoming AI Call",
+          description: `Sara AI answering call from ${inboundCall.customer_number}`,
+        });
+      }
+    };
+
+    // Check immediately on mount
+    checkInboundCalls();
+
+    // Poll every 3 seconds for new inbound calls
+    const pollInterval = setInterval(checkInboundCalls, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeCallDbId, toast]);
 
   // Function to fetch transcripts from DB
   const fetchTranscripts = async (callId: string) => {
@@ -268,6 +308,8 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
         // Store DB call ID for live transcript subscription
         if (data.dbCallId) {
           setActiveCallDbId(data.dbCallId);
+          setActiveCallDirection('outbound');
+          setActiveCallNumber(phoneNumber);
           setLiveTranscripts([]);
         }
 
@@ -424,33 +466,55 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
       </CardContent>
     </Card>
 
-    {/* Active Call Status Card */}
+    {/* Active Call Status Card (Inbound or Outbound) */}
     {activeCallDbId && (
       <div className="fixed bottom-4 right-4 w-80 z-50">
-        <Card className="shadow-2xl border-2 border-pink-500/50 bg-gradient-to-br from-background to-pink-500/10">
+        <Card className={`shadow-2xl border-2 bg-gradient-to-br from-background ${
+          activeCallDirection === 'inbound'
+            ? 'border-green-500/50 to-green-500/10'
+            : 'border-pink-500/50 to-pink-500/10'
+        }`}>
           <CardHeader className="pb-2 pt-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-pink-500/20 flex items-center justify-center animate-pulse">
-                  <PhoneCall className="h-4 w-4 text-pink-500" />
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center animate-pulse ${
+                  activeCallDirection === 'inbound' ? 'bg-green-500/20' : 'bg-pink-500/20'
+                }`}>
+                  <PhoneCall className={`h-4 w-4 ${
+                    activeCallDirection === 'inbound' ? 'text-green-500' : 'text-pink-500'
+                  }`} />
                 </div>
                 <div>
-                  <CardTitle className="text-sm">Sara AI Calling</CardTitle>
-                  <p className="text-[10px] text-muted-foreground">Call in Progress</p>
+                  <CardTitle className="text-sm">
+                    {activeCallDirection === 'inbound' ? 'Sara AI Receiving' : 'Sara AI Calling'}
+                  </CardTitle>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    {activeCallNumber || 'Unknown'}
+                  </p>
                 </div>
               </div>
-              <Badge className="bg-pink-500 text-white border-0 animate-pulse text-[10px]">
-                LIVE
+              <Badge className={`text-white border-0 animate-pulse text-[10px] ${
+                activeCallDirection === 'inbound' ? 'bg-green-500' : 'bg-pink-500'
+              }`}>
+                {activeCallDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-3 pt-0 pb-3">
-            <div className="p-2 rounded-lg bg-pink-500/5 border border-pink-500/20">
+            <div className={`p-2 rounded-lg border ${
+              activeCallDirection === 'inbound'
+                ? 'bg-green-500/5 border-green-500/20'
+                : 'bg-pink-500/5 border-pink-500/20'
+            }`}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-medium text-muted-foreground">Transcript</span>
                 <div className="flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-pink-500 animate-pulse" />
-                  <span className="text-[10px] font-medium text-pink-500">{liveTranscripts.length} messages</span>
+                  <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${
+                    activeCallDirection === 'inbound' ? 'bg-green-500' : 'bg-pink-500'
+                  }`} />
+                  <span className={`text-[10px] font-medium ${
+                    activeCallDirection === 'inbound' ? 'text-green-500' : 'text-pink-500'
+                  }`}>{liveTranscripts.length} messages</span>
                 </div>
               </div>
             </div>
@@ -460,7 +524,11 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
                 variant="default"
                 size="sm"
                 onClick={() => setIsTranscriptOpen(true)}
-                className="flex-1 gap-1 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 h-7 text-xs"
+                className={`flex-1 gap-1 h-7 text-xs ${
+                  activeCallDirection === 'inbound'
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                    : 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700'
+                }`}
               >
                 <FileText className="h-3 w-3" />
                 Live Transcript {liveTranscripts.length > 0 && `(${liveTranscripts.length})`}
@@ -470,9 +538,15 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
                 size="sm"
                 onClick={() => {
                   setActiveCallDbId(null);
+                  setActiveCallDirection(null);
+                  setActiveCallNumber(null);
                   setLiveTranscripts([]);
                 }}
-                className="border-pink-500/30 hover:bg-pink-500/10 h-7 w-7 p-0"
+                className={`h-7 w-7 p-0 ${
+                  activeCallDirection === 'inbound'
+                    ? 'border-green-500/30 hover:bg-green-500/10'
+                    : 'border-pink-500/30 hover:bg-pink-500/10'
+                }`}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -487,34 +561,53 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
       <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-pink-500/20 flex items-center justify-center animate-pulse">
-              <PhoneCall className="h-3 w-3 text-pink-500" />
+            <div className={`h-6 w-6 rounded-full flex items-center justify-center animate-pulse ${
+              activeCallDirection === 'inbound' ? 'bg-green-500/20' : 'bg-pink-500/20'
+            }`}>
+              <PhoneCall className={`h-3 w-3 ${
+                activeCallDirection === 'inbound' ? 'text-green-500' : 'text-pink-500'
+              }`} />
             </div>
             Live Transcript
-            <Badge className="bg-pink-500 text-white border-0 animate-pulse text-[10px] ml-2">
-              LIVE
+            <Badge className={`text-white border-0 animate-pulse text-[10px] ml-2 ${
+              activeCallDirection === 'inbound' ? 'bg-green-500' : 'bg-pink-500'
+            }`}>
+              {activeCallDirection === 'inbound' ? 'INBOUND' : 'OUTBOUND'}
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            Real-time conversation with Sara AI
+            {activeCallDirection === 'inbound'
+              ? `Incoming call from ${activeCallNumber || 'Unknown'}`
+              : `Outgoing call to ${activeCallNumber || 'Unknown'}`}
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="flex-1 max-h-[50vh] pr-4">
           <div className="space-y-3 py-4">
             {liveTranscripts.length === 0 ? (
               <div className="text-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-pink-500" />
+                <Loader2 className={`h-6 w-6 animate-spin mx-auto mb-2 ${
+                  activeCallDirection === 'inbound' ? 'text-green-500' : 'text-pink-500'
+                }`} />
                 <p className="text-sm text-muted-foreground">Waiting for conversation...</p>
               </div>
             ) : (
               liveTranscripts.map((entry, index) => {
                 const isCustomer = entry.speaker === 'customer';
+                const isInbound = activeCallDirection === 'inbound';
                 return (
                   <div
                     key={index}
-                    className={`p-3 rounded-lg ${isCustomer ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-pink-500/10 border border-pink-500/20'}`}
+                    className={`p-3 rounded-lg ${
+                      isCustomer
+                        ? 'bg-blue-500/10 border border-blue-500/20'
+                        : isInbound
+                          ? 'bg-green-500/10 border border-green-500/20'
+                          : 'bg-pink-500/10 border border-pink-500/20'
+                    }`}
                   >
-                    <p className={`text-xs font-medium mb-1 ${isCustomer ? 'text-blue-400' : 'text-pink-400'}`}>
+                    <p className={`text-xs font-medium mb-1 ${
+                      isCustomer ? 'text-blue-400' : isInbound ? 'text-green-400' : 'text-pink-400'
+                    }`}>
                       {isCustomer ? 'Customer' : 'Sara AI'}
                     </p>
                     <p className="text-sm">{entry.text}</p>
@@ -526,7 +619,9 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
         </ScrollArea>
         <DialogFooter className="flex-shrink-0">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mr-auto">
-            <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
+            <div className={`w-2 h-2 rounded-full animate-pulse ${
+              activeCallDirection === 'inbound' ? 'bg-green-500' : 'bg-pink-500'
+            }`} />
             {liveTranscripts.length} messages
           </div>
           <Button variant="outline" onClick={() => setIsTranscriptOpen(false)}>

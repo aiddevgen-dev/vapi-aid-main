@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Phone, PhoneIncoming, PhoneOutgoing, CheckCircle, Loader2, Clock, ChevronDown, FileText } from 'lucide-react';
+import { Phone, PhoneIncoming, PhoneOutgoing, CheckCircle, Loader2, Clock, ChevronDown, FileText, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AISession } from '@/pages/PinkMobileDashboard';
 import { TranscriptViewerDialog } from './TranscriptViewerDialog';
@@ -37,6 +37,11 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
   const [totalCount, setTotalCount] = useState(0);
   const [transcriptDialogOpen, setTranscriptDialogOpen] = useState(false);
   const [selectedCallForTranscript, setSelectedCallForTranscript] = useState<CallRecord | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Ref to always have latest calls for loadMore
+  const callsRef = useRef<CallRecord[]>([]);
+  callsRef.current = calls;
 
   const handleViewTranscript = (call: CallRecord) => {
     setSelectedCallForTranscript(call);
@@ -49,7 +54,9 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
         setLoadingMore(true);
       }
 
-      const offset = loadMore ? calls.length : 0;
+      // Use ref for loadMore to always have latest calls
+      const currentCalls = callsRef.current;
+      const offset = loadMore ? currentCalls.length : 0;
 
       // First, always get active calls (no limit)
       const { data: activeCalls, error: activeError } = await supabase
@@ -80,7 +87,7 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
       const filteredOther = (otherCalls || []).filter(c => !activeIds.has(c.id));
 
       const allCallsData = loadMore
-        ? [...(activeCalls || []), ...calls.filter(c => c.call_status !== 'in-progress'), ...filteredOther]
+        ? [...(activeCalls || []), ...currentCalls.filter(c => c.call_status !== 'in-progress'), ...filteredOther]
         : [...(activeCalls || []), ...filteredOther];
 
       // Remove duplicates by id
@@ -109,32 +116,46 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      setIsRefreshing(false);
     }
-  }, [calls]);
+  }, []); // No dependencies - uses ref for current calls
 
   // Initial fetch and realtime subscription
   useEffect(() => {
     fetchCalls(false);
 
+    // Generate unique channel name to avoid conflicts
+    const channelId = `live-calls-panel-${Date.now()}`;
+    console.log('LiveSessionsPanel: Setting up realtime subscription:', channelId);
+
     // Subscribe to realtime changes on calls table
     const channel = supabase
-      .channel('live-calls')
+      .channel(channelId)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'calls' },
+        { event: 'INSERT', schema: 'public', table: 'calls' },
         (payload) => {
-          console.log('Realtime call update:', payload);
-          fetchCalls(false); // Refetch on any change
+          console.log('LiveSessionsPanel: New call INSERT detected:', payload.new);
+          fetchCalls(false); // Refetch on new call
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'calls' },
+        (payload) => {
+          console.log('LiveSessionsPanel: Call UPDATE detected:', payload.new);
+          fetchCalls(false); // Refetch on status change
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
+        console.log('LiveSessionsPanel: Subscription status:', status);
       });
 
     return () => {
+      console.log('LiveSessionsPanel: Cleaning up subscription:', channelId);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchCalls]);
 
   // Refetch when refreshKey changes (triggered by parent after call is made)
   useEffect(() => {
@@ -144,20 +165,23 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
     }
   }, [refreshKey]);
 
-  // Poll every 5 seconds when there are active calls (backup for realtime)
+  // Poll every 3 seconds as reliable fallback (Realtime can be unreliable)
   useEffect(() => {
-    const hasActiveCalls = calls.some(c => c.call_status === 'in-progress');
+    console.log('LiveSessionsPanel: Starting polling fallback (every 3s)');
+    const pollInterval = setInterval(() => {
+      fetchCalls(false);
+    }, 3000);
 
-    if (hasActiveCalls) {
-      console.log('Active calls detected, starting polling...');
-      const pollInterval = setInterval(() => {
-        console.log('Polling for call updates...');
-        fetchCalls(false);
-      }, 5000);
+    return () => {
+      console.log('LiveSessionsPanel: Stopping polling');
+      clearInterval(pollInterval);
+    };
+  }, [fetchCalls]);
 
-      return () => clearInterval(pollInterval);
-    }
-  }, [calls]);
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+    fetchCalls(false);
+  };
 
   const handleLoadMore = () => {
     fetchCalls(true);
@@ -206,6 +230,16 @@ export const LiveSessionsPanel = ({ onSelectSession, selectedSessionId, refreshK
                 {activeCalls.length} Active
               </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing || loading}
+              className="h-5 w-5 lg:h-6 lg:w-6"
+              title="Refresh calls"
+            >
+              <RefreshCw className={`h-2.5 w-2.5 lg:h-3 lg:w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </CardTitle>
         <div className="flex items-center justify-between text-[10px] lg:text-xs text-muted-foreground">
