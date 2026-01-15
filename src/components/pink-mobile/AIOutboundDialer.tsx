@@ -468,7 +468,7 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
 
     {/* Active Call Status Card (Inbound or Outbound) */}
     {activeCallDbId && (
-      <div className="fixed bottom-4 right-4 w-80 z-50">
+      <div className="fixed bottom-24 right-4 w-80 z-50">
         <Card className={`shadow-2xl border-2 bg-gradient-to-br from-background ${
           activeCallDirection === 'inbound'
             ? 'border-green-500/50 to-green-500/10'
