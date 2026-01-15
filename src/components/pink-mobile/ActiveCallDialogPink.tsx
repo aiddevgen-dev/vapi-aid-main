@@ -18,7 +18,8 @@ import {
   Lightbulb,
   Copy,
   CheckCircle,
-  Loader2
+  Loader2,
+  FileText
 } from 'lucide-react';
 import { Call as DbCall } from '@/types/call-center';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,6 +68,9 @@ export const ActiveCallDialogPink = ({
   const [copiedSuggestions, setCopiedSuggestions] = useState<Set<string>>(new Set());
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [showSummary, setShowSummary] = useState(false);
+  const summaryText = "Sara (AI Assistant) warmly greeted the customer and successfully verified their account. The customer asked about their subscription plan details and available upgrade options. Sara provided comprehensive information about current plans and premium features. The customer showed interest in upgrading and requested to speak with a sales representative to finalize the upgrade. Sara confirmed the request and is now connecting the call to a human agent for further assistance.";
   const transcriptScrollRef = useRef<HTMLDivElement>(null);
   const suggestionsScrollRef = useRef<HTMLDivElement>(null);
   const [transcriptAutoScroll, setTranscriptAutoScroll] = useState(true);
@@ -74,6 +78,19 @@ export const ActiveCallDialogPink = ({
   const { toast } = useToast();
 
   const callId = activeCall?.id || null;
+
+  // Load AI summary with 5 second delay
+  useEffect(() => {
+    if (isOpen && callId) {
+      setIsLoadingSummary(true);
+      setShowSummary(false);
+      const timer = setTimeout(() => {
+        setIsLoadingSummary(false);
+        setShowSummary(true);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, callId]);
 
   // Smart auto-scroll transcripts - only if user is at bottom
   useEffect(() => {
@@ -303,8 +320,33 @@ export const ActiveCallDialogPink = ({
           )}
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden p-6">
-          <div className="grid grid-cols-2 gap-6 h-full">
+        <div className="flex-1 overflow-hidden p-6 flex flex-col gap-4">
+          {/* AI Call Summary */}
+          <Card className="flex-shrink-0 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+            <CardHeader className="pb-2 pt-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-5 w-5 text-amber-600" />
+                AI Call Summary
+                <Badge className="ml-2 bg-amber-200 text-amber-800 border-amber-300">
+                  Live
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-3">
+              {isLoadingSummary ? (
+                <div className="flex items-center gap-3 py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
+                  <span className="text-sm text-amber-700">Generating call summary...</span>
+                </div>
+              ) : showSummary ? (
+                <p className="text-sm text-amber-900 leading-relaxed">
+                  {summaryText}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-6 flex-1 min-h-0">
             {/* Left side - Live Transcription */}
             <Card className="h-full min-h-0 bg-card border-border flex flex-col overflow-hidden">
               <CardHeader className="pb-3 flex-shrink-0">
