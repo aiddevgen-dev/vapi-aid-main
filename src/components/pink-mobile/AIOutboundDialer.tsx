@@ -581,7 +581,9 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
               : `Outgoing call to ${activeCallNumber || 'Unknown'}`}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-1 max-h-[50vh] pr-4">
+        <div className={`flex-1 max-h-[50vh] overflow-y-scroll pr-4 ${
+          activeCallDirection === 'inbound' ? 'dialog-scroll-transcripts' : 'dialog-scroll-suggestions'
+        }`}>
           <div className="space-y-3 py-4">
             {liveTranscripts.length === 0 ? (
               <div className="text-center py-8">
@@ -616,7 +618,7 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
               })
             )}
           </div>
-        </ScrollArea>
+        </div>
         <DialogFooter className="flex-shrink-0">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mr-auto">
             <div className={`w-2 h-2 rounded-full animate-pulse ${
