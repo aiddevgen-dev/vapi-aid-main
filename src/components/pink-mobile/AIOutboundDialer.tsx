@@ -35,6 +35,12 @@ interface PinkCustomer {
   address: string | null;
 }
 
+interface Lead {
+  id: string;
+  name: string;
+  phone_number: string;
+}
+
 interface AIOutboundDialerProps {
   agentId?: string;
   onCallMade?: () => void;
@@ -43,6 +49,8 @@ interface AIOutboundDialerProps {
 export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboundDialerProps) => {
   const [customers, setCustomers] = useState<PinkCustomer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<PinkCustomer[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [manualNumber, setManualNumber] = useState('');
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -110,15 +118,17 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
     fetchAgentId();
   }, [user, propAgentId]);
 
-  // Fetch Pink Mobile customers
+  // Fetch Pink Mobile customers and leads
   useEffect(() => {
     fetchCustomers();
+    fetchLeads();
   }, []);
 
-  // Filter customers based on search
+  // Filter customers and leads based on search
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredCustomers(customers);
+      setFilteredLeads(leads);
     } else {
       const query = searchQuery.toLowerCase();
       setFilteredCustomers(customers.filter(c =>
@@ -126,8 +136,12 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
         c.phone.includes(query) ||
         (c.email && c.email.toLowerCase().includes(query))
       ));
+      setFilteredLeads(leads.filter(l =>
+        l.name.toLowerCase().includes(query) ||
+        l.phone_number.includes(query)
+      ));
     }
-  }, [searchQuery, customers]);
+  }, [searchQuery, customers, leads]);
 
   // Check for inbound VAPI calls (polling as reliable fallback)
   useEffect(() => {
@@ -279,6 +293,21 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
     }
   };
 
+  const fetchLeads = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, name, phone_number')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setLeads(data || []);
+      setFilteredLeads(data || []);
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+    }
+  };
+
   const makeOutboundCall = async (phoneNumber: string, customerName?: string) => {
     if (!phoneNumber.trim()) {
       toast({
@@ -404,6 +433,59 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-7 lg:h-8 pl-7 lg:pl-8 text-[10px] lg:text-xs"
           />
+        </div>
+
+        {/* Leads List */}
+        <div className="overflow-hidden">
+          <div className="flex items-center justify-between mb-1.5 lg:mb-2">
+            <p className="text-[10px] lg:text-xs text-muted-foreground flex items-center gap-1">
+              <Phone className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+              Leads
+            </p>
+            <Badge variant="outline" className="text-[9px] lg:text-[10px] px-1 border-purple-500/30 text-purple-400">
+              {filteredLeads.length}
+            </Badge>
+          </div>
+          {filteredLeads.length === 0 ? (
+            <div className="text-center py-2 lg:py-3">
+              <Phone className="h-4 w-4 lg:h-5 lg:w-5 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-[9px] lg:text-xs text-muted-foreground">No leads</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-40 lg:h-48 pr-2">
+              <div className="space-y-1.5 lg:space-y-2 pb-8">
+                {filteredLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    className="p-1.5 lg:p-2.5 rounded-lg border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-1.5 lg:gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-[10px] lg:text-sm truncate">{lead.name}</p>
+                        <p className="text-[9px] lg:text-xs text-muted-foreground font-mono truncate">{lead.phone_number}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => makeOutboundCall(lead.phone_number, lead.name)}
+                        disabled={!!callingNumber}
+                        className="bg-purple-600 hover:bg-purple-700 text-white h-6 lg:h-7 w-6 lg:w-auto lg:px-2 p-0 text-[10px] lg:text-xs flex-shrink-0"
+                        title="AI Call"
+                      >
+                        {callingNumber === lead.phone_number ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <>
+                            <Bot className="h-3 w-3" />
+                            <span className="hidden lg:inline ml-1">Call</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
         </div>
 
         {/* Customer List */}
