@@ -77,7 +77,10 @@ export const WorkflowTriggerPanel = () => {
   const [customerName, setCustomerName] = useState('');
   const [isStarting, setIsStarting] = useState(false);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [activeCallDbId, setActiveCallDbId] = useState<string | null>(null);
   const [isOrchestrationOpen, setIsOrchestrationOpen] = useState(false);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [liveTranscripts, setLiveTranscripts] = useState<Array<{ speaker: string; text: string; created_at: string }>>([]);
 
   const { toast } = useToast();
 
@@ -163,6 +166,50 @@ export const WorkflowTriggerPanel = () => {
     loadWorkflows();
   }, [loadWorkflows]);
 
+  // Subscribe to live transcripts via Supabase Realtime
+  useEffect(() => {
+    if (!activeCallDbId) return;
+
+    console.log('Subscribing to live transcripts for call:', activeCallDbId);
+
+    // Fetch existing transcripts first
+    const fetchExisting = async () => {
+      const { data } = await supabase
+        .from('transcripts')
+        .select('speaker, text, created_at')
+        .eq('call_id', activeCallDbId)
+        .order('created_at', { ascending: true });
+      if (data) {
+        setLiveTranscripts(data);
+      }
+    };
+    fetchExisting();
+
+    // Subscribe to new transcripts
+    const channel = supabase
+      .channel(`transcripts-${activeCallDbId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'transcripts',
+          filter: `call_id=eq.${activeCallDbId}`,
+        },
+        (payload) => {
+          console.log('New transcript received:', payload.new);
+          const newEntry = payload.new as { speaker: string; text: string; created_at: string };
+          setLiveTranscripts((prev) => [...prev, newEntry]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Unsubscribing from transcripts channel');
+      supabase.removeChannel(channel);
+    };
+  }, [activeCallDbId]);
+
   const handleRunWorkflow = (workflow: Workflow) => {
     setSelectedWorkflow(workflow);
     setPhoneNumber('');
@@ -213,6 +260,7 @@ export const WorkflowTriggerPanel = () => {
       const vapiCallId = data.vapiCallId || data.callId || data.call_id;
       console.log('Extracted vapiCallId:', vapiCallId);
       setActiveCallId(vapiCallId);
+      setLiveTranscripts([]); // Reset transcripts for new call
 
       // Save call to calls table so it appears in Live Calls
       if (vapiCallId) {
@@ -222,7 +270,7 @@ export const WorkflowTriggerPanel = () => {
           .insert({
             customer_number: phoneNumber,
             call_direction: 'outbound',
-            call_status: 'completed',
+            call_status: 'in-progress',
             vapi_call_id: vapiCallId,
           } as any)
           .select();
@@ -231,6 +279,10 @@ export const WorkflowTriggerPanel = () => {
           console.error('Error saving call to database:', insertError);
         } else {
           console.log('Call saved successfully:', insertedCall);
+          // Store the DB call ID for realtime subscription
+          if (insertedCall && insertedCall[0]) {
+            setActiveCallDbId(insertedCall[0].id);
+          }
         }
       }
 
@@ -427,16 +479,29 @@ export const WorkflowTriggerPanel = () => {
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={() => setIsOrchestrationOpen(true)}
+                  onClick={() => setIsTranscriptOpen(true)}
                   className="flex-1 gap-1 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 h-7 text-xs"
                 >
-                  <Eye className="h-3 w-3" />
-                  View Workflow
+                  <FileText className="h-3 w-3" />
+                  Live Transcript {liveTranscripts.length > 0 && `(${liveTranscripts.length})`}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveCallId(null)}
+                  onClick={() => setIsOrchestrationOpen(true)}
+                  className="border-purple-500/30 hover:bg-purple-500/10 h-7 w-7 p-0"
+                  title="View Workflow"
+                >
+                  <Eye className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setActiveCallId(null);
+                    setActiveCallDbId(null);
+                    setLiveTranscripts([]);
+                  }}
                   className="border-purple-500/30 hover:bg-purple-500/10 h-7 w-7 p-0"
                 >
                   <X className="h-3 w-3" />
@@ -549,6 +614,60 @@ export const WorkflowTriggerPanel = () => {
               Close
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Live Transcript Dialog */}
+      <Dialog open={isTranscriptOpen} onOpenChange={setIsTranscriptOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
+                <PhoneCall className="h-3 w-3 text-purple-500" />
+              </div>
+              Live Transcript
+              <Badge className="bg-purple-500 text-white border-0 animate-pulse text-[10px] ml-2">
+                LIVE
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>
+              Real-time conversation transcript
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 max-h-[50vh] pr-4">
+            <div className="space-y-3 py-4">
+              {liveTranscripts.length === 0 ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-purple-500" />
+                  <p className="text-sm text-muted-foreground">Waiting for conversation...</p>
+                </div>
+              ) : (
+                liveTranscripts.map((entry, index) => {
+                  const isCustomer = entry.speaker === 'customer';
+                  return (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-lg ${isCustomer ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-purple-500/10 border border-purple-500/20'}`}
+                    >
+                      <p className={`text-xs font-medium mb-1 ${isCustomer ? 'text-blue-400' : 'text-purple-400'}`}>
+                        {isCustomer ? 'Customer' : 'AI Assistant'}
+                      </p>
+                      <p className="text-sm">{entry.text}</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mr-auto">
+              <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+              {liveTranscripts.length} messages
+            </div>
+            <Button variant="outline" onClick={() => setIsTranscriptOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -5,12 +5,23 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Phone,
   Users,
   Loader2,
   RefreshCw,
   Bot,
-  Search
+  Search,
+  PhoneCall,
+  FileText,
+  X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +48,9 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [callingNumber, setCallingNumber] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(propAgentId || null);
+  const [activeCallDbId, setActiveCallDbId] = useState<string | null>(null);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [liveTranscripts, setLiveTranscripts] = useState<Array<{ speaker: string; text: string; created_at: string }>>([]);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -113,6 +127,95 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
     }
   }, [searchQuery, customers]);
 
+  // Function to fetch transcripts from DB
+  const fetchTranscripts = async (callId: string) => {
+    console.log('Fetching transcripts for call:', callId);
+    const { data } = await supabase
+      .from('transcripts')
+      .select('speaker, text, created_at')
+      .eq('call_id', callId)
+      .order('created_at', { ascending: true });
+    if (data && data.length > 0) {
+      console.log('Fetched', data.length, 'transcripts');
+      setLiveTranscripts(data);
+    }
+    return data;
+  };
+
+  // Subscribe to live transcripts via Supabase Realtime
+  useEffect(() => {
+    if (!activeCallDbId) return;
+
+    console.log('Subscribing to live transcripts for call:', activeCallDbId);
+
+    // Fetch existing transcripts first
+    fetchTranscripts(activeCallDbId);
+
+    // Subscribe to new transcripts
+    const transcriptChannel = supabase
+      .channel(`transcripts-${activeCallDbId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'transcripts',
+          filter: `call_id=eq.${activeCallDbId}`,
+        },
+        (payload) => {
+          console.log('New transcript received:', payload.new);
+          const newEntry = payload.new as { speaker: string; text: string; created_at: string };
+          setLiveTranscripts((prev) => {
+            const updated = [...prev, newEntry];
+            console.log('Updated transcripts array, length:', updated.length);
+            return updated;
+          });
+        }
+      )
+      .subscribe();
+
+    // Subscribe to call status changes
+    const callChannel = supabase
+      .channel(`call-status-${activeCallDbId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+          filter: `id=eq.${activeCallDbId}`,
+        },
+        (payload) => {
+          const newStatus = (payload.new as any).call_status;
+          console.log('Call status changed:', newStatus);
+          if (newStatus === 'completed' || newStatus === 'failed') {
+            // Refetch transcripts when call ends (catches end-of-call-report batch)
+            setTimeout(() => {
+              fetchTranscripts(activeCallDbId);
+              toast({
+                title: "Call Ended",
+                description: "Transcript available in dialog",
+              });
+            }, 2000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Unsubscribing from channels');
+      supabase.removeChannel(transcriptChannel);
+      supabase.removeChannel(callChannel);
+    };
+  }, [activeCallDbId, toast]);
+
+  // Refetch transcripts when dialog opens
+  useEffect(() => {
+    if (isTranscriptOpen && activeCallDbId) {
+      fetchTranscripts(activeCallDbId);
+    }
+  }, [isTranscriptOpen, activeCallDbId]);
+
   const fetchCustomers = async () => {
     setIsLoadingCustomers(true);
     try {
@@ -161,9 +264,16 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
 
       if (data.success) {
         console.log('VAPI call initiated:', data);
+
+        // Store DB call ID for live transcript subscription
+        if (data.dbCallId) {
+          setActiveCallDbId(data.dbCallId);
+          setLiveTranscripts([]);
+        }
+
         toast({
           title: "Call Initiated",
-          description: `Sara AI is calling ${customerName || phoneNumber}${data.dbCallId ? ' (tracked)' : ''}`,
+          description: `Sara AI is calling ${customerName || phoneNumber}`,
         });
         // Trigger refresh of live calls panel
         onCallMade?.();
@@ -185,6 +295,7 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
   };
 
   return (
+    <>
     <Card className="h-full flex flex-col bg-card border-border border-2 border-pink-500/30">
       <CardHeader className="pb-2 pt-2 lg:pt-3 px-2 lg:px-4 flex-shrink-0">
         <CardTitle className="text-sm lg:text-base flex items-center justify-between gap-1">
@@ -312,5 +423,118 @@ export const AIOutboundDialer = ({ agentId: propAgentId, onCallMade }: AIOutboun
         </div>
       </CardContent>
     </Card>
+
+    {/* Active Call Status Card */}
+    {activeCallDbId && (
+      <div className="fixed bottom-4 right-4 w-80 z-50">
+        <Card className="shadow-2xl border-2 border-pink-500/50 bg-gradient-to-br from-background to-pink-500/10">
+          <CardHeader className="pb-2 pt-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-full bg-pink-500/20 flex items-center justify-center animate-pulse">
+                  <PhoneCall className="h-4 w-4 text-pink-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm">Sara AI Calling</CardTitle>
+                  <p className="text-[10px] text-muted-foreground">Call in Progress</p>
+                </div>
+              </div>
+              <Badge className="bg-pink-500 text-white border-0 animate-pulse text-[10px]">
+                LIVE
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0 pb-3">
+            <div className="p-2 rounded-lg bg-pink-500/5 border border-pink-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-muted-foreground">Transcript</span>
+                <div className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-pink-500 animate-pulse" />
+                  <span className="text-[10px] font-medium text-pink-500">{liveTranscripts.length} messages</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsTranscriptOpen(true)}
+                className="flex-1 gap-1 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 h-7 text-xs"
+              >
+                <FileText className="h-3 w-3" />
+                Live Transcript {liveTranscripts.length > 0 && `(${liveTranscripts.length})`}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setActiveCallDbId(null);
+                  setLiveTranscripts([]);
+                }}
+                className="border-pink-500/30 hover:bg-pink-500/10 h-7 w-7 p-0"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )}
+
+    {/* Live Transcript Dialog */}
+    <Dialog open={isTranscriptOpen} onOpenChange={setIsTranscriptOpen}>
+      <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-pink-500/20 flex items-center justify-center animate-pulse">
+              <PhoneCall className="h-3 w-3 text-pink-500" />
+            </div>
+            Live Transcript
+            <Badge className="bg-pink-500 text-white border-0 animate-pulse text-[10px] ml-2">
+              LIVE
+            </Badge>
+          </DialogTitle>
+          <DialogDescription>
+            Real-time conversation with Sara AI
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="flex-1 max-h-[50vh] pr-4">
+          <div className="space-y-3 py-4">
+            {liveTranscripts.length === 0 ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-pink-500" />
+                <p className="text-sm text-muted-foreground">Waiting for conversation...</p>
+              </div>
+            ) : (
+              liveTranscripts.map((entry, index) => {
+                const isCustomer = entry.speaker === 'customer';
+                return (
+                  <div
+                    key={index}
+                    className={`p-3 rounded-lg ${isCustomer ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-pink-500/10 border border-pink-500/20'}`}
+                  >
+                    <p className={`text-xs font-medium mb-1 ${isCustomer ? 'text-blue-400' : 'text-pink-400'}`}>
+                      {isCustomer ? 'Customer' : 'Sara AI'}
+                    </p>
+                    <p className="text-sm">{entry.text}</p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </ScrollArea>
+        <DialogFooter className="flex-shrink-0">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mr-auto">
+            <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
+            {liveTranscripts.length} messages
+          </div>
+          <Button variant="outline" onClick={() => setIsTranscriptOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
